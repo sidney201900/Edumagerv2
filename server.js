@@ -326,8 +326,9 @@ app.get('/api/logs', (req, res) => res.json(apiLogs));
 const isUUID = (str) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 const formatInstallmentId = (id) => {
   if (!id) return id;
+  // Corrige os 'inst_' perdidos em bases legadas
   if (id.startsWith('inst_')) return id.replace('inst_', 'ins_');
-  if (isUUID(id)) return `ins_${id}`;
+  // Se for UUID, não anexe nada! O AsaasSandbox aceita/exige UUID puro.
   return id;
 };
 
