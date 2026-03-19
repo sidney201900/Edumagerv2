@@ -30,6 +30,9 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
   const [selectedStudentHistory, setSelectedStudentHistory] = useState<Student | null>(null);
   const [selectedStudentForCarne, setSelectedStudentForCarne] = useState<string>('');
   const [paymentToDelete, setPaymentToDelete] = useState<Payment | null>(null);
+  const [selectedPayments, setSelectedPayments] = useState<string[]>([]);
+  const [carneToDelete, setCarneToDelete] = useState<{ installmentId: string, payments: any[] } | null>(null);
+  const [carneSelectedPayments, setCarneSelectedPayments] = useState<string[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isFetchingCarne, setIsFetchingCarne] = useState(false);
@@ -580,7 +583,45 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
     } finally {
       setIsDeleting(false);
     }
-  };
+  };
+
+  const handleBulkDelete = async (ids: string[], isCarneContext = false) => {
+    if (ids.length === 0 || isDeleting) return;
+    setIsDeleting(true);
+    let successCount = 0;
+    let newPayments = [...data.payments];
+
+    showAlert('Aguarde', `Excluindo ${ids.length} cobranças no Asaas...`, 'info');
+    
+    for (const id of ids) {
+      try {
+        const response = await fetch('/api/excluir_cobranca', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id })
+        });
+        if (response.ok) {
+          successCount++;
+          newPayments = newPayments.filter(p => p.id !== id && p.asaasPaymentId !== id);
+        }
+      } catch (e) { console.error('Error batch deleting', id, e); }
+    }
+
+    if (successCount > 0) {
+      updateData({ payments: newPayments });
+      showAlert('Sucesso', `${successCount} exclusão(ões) concluída(s) com sucesso.`, 'success');
+    } else {
+      showAlert('Erro', 'Falha ao excluir selecionados.', 'error');
+    }
+    
+    if (isCarneContext) {
+      setCarneToDelete(null);
+      setCarneSelectedPayments([]);
+    } else {
+      setSelectedPayments([]);
+    }
+    setIsDeleting(false);
+  };
 
   const openHistory = (studentId: string) => {
     const student = data.students.find(s => s.id === studentId);
@@ -737,7 +778,13 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
           <table className="w-full text-left">
             <thead className="bg-slate-50 text-slate-500 text-[10px] uppercase font-black tracking-[0.1em]">
               <tr>
-                <th className="px-6 py-4">Aluno / Descrição</th>
+                <th className="px-6 py-4 w-12 text-center">
+  <input type="checkbox" className="rounded text-indigo-600 focus:ring-indigo-500" 
+    checked={selectedPayments.length > 0 && selectedPayments.length === filteredPayments.filter(p=>p.status !== 'paid').length}
+    onChange={(e) => setSelectedPayments(e.target.checked ? filteredPayments.filter(p=>p.status !== 'paid').map(p=>p.asaasPaymentId || p.id) : [])}
+  />
+</th>
+<th className="px-6 py-4">Aluno / Descrição</th>
                 <th className="px-6 py-4">Vencimento</th>
                 <th className="px-6 py-4">Valor</th>
                 <th className="px-6 py-4">Status</th>
@@ -794,7 +841,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
                           >
                             <Printer size={14} /> Imprimir Carnê
                           </button>
-                          <button onClick={() => openDelete({ ...group.payments[0], id: group.installmentId, installmentId: group.installmentId, asaasIdParaExcluir: group.installmentId } as any)} className="p-2 text-slate-400 hover:text-red-600 transition-all" title="Excluir Carnê Completo (Asaas)"><Trash2 size={18} /></button>
+                          <button onClick={() => { setCarneToDelete(group); setCarneSelectedPayments(group.payments.filter(p => p.status !== 'paid').map(p => p.asaasPaymentId || p.id)); }} className="p-2 text-slate-400 hover:text-red-600 transition-all" title="Excluir Carnê Completo (Asaas)"><Trash2 size={18} /></button>
                         </td>
                       </tr>
                       {isExpanded && group.payments.map(payment => (
@@ -1205,7 +1252,55 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
       )}
 
       {/* PRINT CARNE MODAL */}
-      {showPrintCarneModal && (
+      
+{carneToDelete && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="bg-white rounded-3xl w-full max-w-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 relative overflow-hidden">
+        <div className="relative z-10 flex items-center gap-4">
+          <div className="w-12 h-12 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center shadow-inner">
+            <Trash2 size={24} />
+          </div>
+          <div>
+            <h3 className="text-xl font-black text-slate-800 tracking-tight">Exclusão de Carnê</h3>
+            <p className="text-slate-500 text-sm font-medium mt-1">Selecione as parcelas pendentes para exclusão</p>
+          </div>
+        </div>
+      </div>
+      <div className="p-8 overflow-y-auto">
+        <div className="space-y-3">
+          {carneToDelete.payments.map(p => (
+            <label key={p.id} className={`flex items-center gap-4 p-4 rounded-xl border ${p.status === 'paid' ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 cursor-pointer hover:border-indigo-300'}`}>
+              <input type="checkbox" disabled={p.status === 'paid'} checked={carneSelectedPayments.includes(p.asaasPaymentId || p.id)} onChange={e => {
+                if (e.target.checked) setCarneSelectedPayments(prev => [...prev, p.asaasPaymentId || p.id]);
+                else setCarneSelectedPayments(prev => prev.filter(id => id !== (p.asaasPaymentId || p.id)));
+              }} className="rounded text-indigo-600 w-5 h-5 focus:ring-indigo-500 disabled:opacity-50" />
+              <div className="flex-1 flex justify-between items-center">
+                <div>
+                  <span className="font-bold text-slate-700">Parcela {p.installmentNumber}</span>
+                  <span className="text-sm font-medium text-slate-500 ml-3">Venc: {new Date(p.dueDate).toLocaleDateString()}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-black text-slate-800">R$ {p.amount.toFixed(2)}</span>
+                  <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${p.status === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {p.status === 'paid' ? 'PAGO' : 'PENDENTE'}
+                  </span>
+                </div>
+              </div>
+            </label>
+          ))}
+        </div>
+      </div>
+      <div className="px-8 py-6 bg-slate-50 flex justify-end gap-3 border-t border-slate-100">
+        <button onClick={() => setCarneToDelete(null)} disabled={isDeleting} className="px-6 py-3 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50">Cancelar</button>
+        <button onClick={() => handleBulkDelete(carneSelectedPayments, true)} disabled={isDeleting || carneSelectedPayments.length === 0} className="px-6 py-3 text-sm font-bold text-white bg-red-600 rounded-xl hover:bg-red-700 flex items-center gap-2 shadow-lg shadow-red-600/20 disabled:opacity-50">
+          <Trash2 size={16} /> Excluir {carneSelectedPayments.length} Avaliados
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+{showPrintCarneModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in">
           <div className="bg-white rounded-xl w-full max-w-2xl shadow-2xl my-auto relative overflow-hidden animate-slide-up">
             <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
