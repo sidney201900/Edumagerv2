@@ -1109,7 +1109,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
               <p className="text-sm text-slate-500 mb-6">Como deseja excluir este lançamento?</p>
               
               <div className="flex flex-col gap-2">
-                {paymentToDelete.id && typeof paymentToDelete.id === 'string' && paymentToDelete.id.startsWith('inst_') ? (
+                {paymentToDelete.id && typeof paymentToDelete.id === 'string' && (paymentToDelete.id.startsWith('inst_') || paymentToDelete.id.startsWith('ins_')) ? (
                   <button onClick={() => handleDelete('all')} className="w-full py-3 bg-red-600 text-white rounded-xl font-bold text-sm hover:bg-red-700 transition-all">
                     Excluir Carnê Completo
                   </button>

@@ -244,7 +244,7 @@ app.post('/api/gerar_cobranca', async (req, res) => {
     let paymentsToSave = [];
     
     // CORREÇÃO: O ID oficial do parcelamento SEMPRE vem em paymentData.installment
-    const installmentId = paymentData.installment;
+    const installmentId = formatInstallmentId(paymentData.installment);
 
     if (isInstallment && installmentId) {
       // Condição B: Salvar todas as parcelas geradas com o ID do pacote (installment)
@@ -324,6 +324,13 @@ function addLog(service, action, details) {
 app.get('/api/logs', (req, res) => res.json(apiLogs));
 
 const isUUID = (str) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+const formatInstallmentId = (id) => {
+  if (!id) return id;
+  if (id.startsWith('inst_')) return id.replace('inst_', 'ins_');
+  if (isUUID(id)) return `ins_${id}`;
+  return id;
+};
+
 
 // EXCLUSÃO EM MASSA (Asaas + EduManager)
 // Regra: Apagar no Asaas PRIMEIRO. SÓ apagar do banco se o Asaas retornar sucesso.
@@ -352,8 +359,9 @@ app.post('/api/excluir_cobranca', async (req, res) => {
     let fallbackToDB = true;
 
     if (isInstallmentPackage) {
-      console.log(`[Exclusão] Deletando parcelamento ${id} no Asaas...`);
-      const resp = await fetch(`https://sandbox.asaas.com/api/v3/installments/${id}`, { 
+      console.log(`[Exclusão] Deletando parcelamento ${asaasTargetId} no Asaas...`);
+      const asaasTargetId = formatInstallmentId(id);
+      const resp = await fetch(`https://sandbox.asaas.com/api/v3/installments/${asaasTargetId}`, { 
         method: 'DELETE', 
         headers: { 'access_token': process.env.ASAAS_API_KEY } 
       });
@@ -389,7 +397,8 @@ app.post('/api/excluir_cobranca', async (req, res) => {
 
       for (const instId of instIds) {
         if (instId === id) continue;
-        const resp = await fetch(`https://sandbox.asaas.com/api/v3/installments/${instId}`, { method: 'DELETE', headers: { 'access_token': process.env.ASAAS_API_KEY } });
+        const formattedLoopId = formatInstallmentId(instId);
+        const resp = await fetch(`https://sandbox.asaas.com/api/v3/installments/${formattedLoopId}`, { method: 'DELETE', headers: { 'access_token': process.env.ASAAS_API_KEY } });
         if (resp.ok) addLog('Asaas', 'Exclusão OK (Resolver DB)', { instId });
         else addLog('Asaas', 'Exclusão FALHOU (Resolver DB)', { instId });
       }
@@ -445,8 +454,9 @@ app.get('/api/parcelamentos/:id/carne', async (req, res) => {
     }
 
     if (instId) {
-      console.log(`[Carnê] Buscando PDF do parcelamento ${instId} no Asaas...`);
-      const ar = await fetch(`https://sandbox.asaas.com/api/v3/installments/${instId}`, { headers: { 'access_token': process.env.ASAAS_API_KEY } });
+      const asaasTargetInstId = formatInstallmentId(instId);
+      console.log(`[Carnê] Buscando PDF do parcelamento ${asaasTargetInstId} no Asaas...`);
+      const ar = await fetch(`https://sandbox.asaas.com/api/v3/installments/${asaasTargetInstId}`, { headers: { 'access_token': process.env.ASAAS_API_KEY } });
       if (ar.ok) {
         const data = await ar.json();
         console.log(`[Carnê] PDF Encontrado:`, data.paymentBookUrl);
