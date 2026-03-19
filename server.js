@@ -359,8 +359,8 @@ app.post('/api/excluir_cobranca', async (req, res) => {
     let fallbackToDB = true;
 
     if (isInstallmentPackage) {
-      console.log(`[Exclusão] Deletando parcelamento ${asaasTargetId} no Asaas...`);
       const asaasTargetId = formatInstallmentId(id);
+      console.log(`[Exclusão] Deletando parcelamento ${asaasTargetId} no Asaas...`);
       const resp = await fetch(`https://sandbox.asaas.com/api/v3/installments/${asaasTargetId}`, { 
         method: 'DELETE', 
         headers: { 'access_token': process.env.ASAAS_API_KEY } 
