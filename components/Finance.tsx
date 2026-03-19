@@ -33,6 +33,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isFetchingCarne, setIsFetchingCarne] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   React.useEffect(() => {
     syncAsaasPayments();
@@ -518,7 +519,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
   };
 
   const handleDelete = async (deleteType: 'single' | 'all') => {
-    if (!paymentToDelete) return;
+    if (!paymentToDelete || isDeleting) return;
 
     console.log('Item a ser excluído:', paymentToDelete);
 
@@ -530,11 +531,11 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
       asaasIdToDelete = (paymentToDelete as any).asaasIdParaExcluir;
     }
     // 2. Se o usuário estiver na aba de 'Parcelamentos' e clicar na lixeira do grupo (fallback)
-    else if (paymentToDelete.id && typeof paymentToDelete.id === 'string' && paymentToDelete.id.startsWith('inst_')) {
+    else if (paymentToDelete.id && typeof paymentToDelete.id === 'string' && (paymentToDelete.id.startsWith('inst_') || paymentToDelete.id.startsWith('ins_'))) {
       asaasIdToDelete = paymentToDelete.id;
     } 
     // 3. Se o usuário escolheu excluir o carnê completo a partir de uma parcela individual
-    else if (deleteType === 'all' && paymentToDelete.installmentId && paymentToDelete.installmentId.startsWith('inst_')) {
+    else if (deleteType === 'all' && paymentToDelete.installmentId && (paymentToDelete.installmentId.startsWith('inst_') || paymentToDelete.installmentId.startsWith('ins_'))) {
       asaasIdToDelete = paymentToDelete.installmentId;
     }
     // 4. Se estiver nas outras abas (Avulsas/Todas) ou excluir apenas uma parcela do carnê
@@ -548,8 +549,9 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
       return;
     }
 
+    setIsDeleting(true);
     try {
-      showAlert('Aguarde', asaasIdToDelete.startsWith('inst_') ? 'Excluindo carnê completo no Asaas...' : 'Excluindo cobrança no Asaas...', 'info');
+      showAlert('Aguarde', (asaasIdToDelete.startsWith('inst_') || asaasIdToDelete.startsWith('ins_')) ? 'Excluindo carnê completo no Asaas...' : 'Excluindo cobrança no Asaas...', 'info');
       const response = await fetch('/api/excluir_cobranca', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -561,23 +563,24 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
       if (response.ok) {
         showAlert('Sucesso', 'Cobrança excluída com sucesso.', 'success');
         
-        // Update local state
+        // SO atualiza se backend confirmou (200 OK)
         let updatedPayments = [...data.payments];
-        if (asaasIdToDelete.startsWith('inst_')) {
+        if (asaasIdToDelete.startsWith('inst_') || asaasIdToDelete.startsWith('ins_')) {
           updatedPayments = updatedPayments.filter(p => p.installmentId !== asaasIdToDelete);
         } else {
           updatedPayments = updatedPayments.filter(p => p.asaasPaymentId !== asaasIdToDelete);
         }
         updateData({ payments: updatedPayments });
+        closeModal();
       } else {
-        showAlert('Erro', result.error || 'Não é possível excluir uma cobrança já paga.', 'error');
+        showAlert('Erro', result.error || 'Não é possível excluir. Verifique se já foi paga.', 'error');
       }
     } catch (error) {
       console.error('Erro ao excluir:', error);
       showAlert('Erro', 'Falha na comunicação com o servidor ao excluir.', 'error');
-    }
-
-    closeModal();
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const openHistory = (studentId: string) => {
