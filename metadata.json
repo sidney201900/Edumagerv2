@@ -1,0 +1,7 @@
+{
+  "name": "Remix: EduManager - Sistema de Gestão Escolar para porteiner",
+  "description": "A comprehensive school management system for computer courses featuring student registration, class scheduling, financial tracking, contract generation, and employee management.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

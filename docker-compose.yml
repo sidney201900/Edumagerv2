@@ -1,0 +1,25 @@
+version: '3.8'
+services:
+  edumanager:
+    build: .
+    environment:
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+      - VITE_SUPABASE_KEY=${VITE_SUPABASE_KEY}
+      - ASAAS_API_KEY=${ASAAS_API_KEY}
+      - ASAAS_WEBHOOK_TOKEN=${ASAAS_WEBHOOK_TOKEN}
+    networks:
+      - traefik-public
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.edumanager.rule=Host(`edumanager.microtecinformaticacurso.com.br`)"
+        - "traefik.http.routers.edumanager.entrypoints=websecure"
+        - "traefik.http.routers.edumanager.tls.certresolver=letsencrypt"
+        - "traefik.http.services.edumanager.loadbalancer.server.port=3000"
+networks:
+  traefik-public:
+    external: true
