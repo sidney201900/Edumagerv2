@@ -344,78 +344,62 @@ app.post('/api/excluir_cobranca', async (req, res) => {
       return res.status(500).json({ error: 'Erro ao buscar dados no banco.' });
     }
 
-    // Identifica se o alvo é um carnê (inst_) ou pagamento avulso (pay_)
-    const isInstallmentPackage = id.startsWith('inst_') || id.startsWith('ins_');
-    const isSinglePayment = id.startsWith('pay_');
+    // Identifica se o alvo é um carnê (não começa com pay_) ou pagamento avulso
+    let isSinglePayment = id.startsWith('pay_');
+    let isInstallmentPackage = !isSinglePayment;
 
     // ==== PASSO 1: APAGAR NO ASAAS PRIMEIRO ====
+    let fallbackToDB = true;
+
     if (isInstallmentPackage) {
-      // Deletar o pacote inteiro de parcelamento no Asaas
       console.log(`[Exclusão] Deletando parcelamento ${id} no Asaas...`);
       const resp = await fetch(`https://sandbox.asaas.com/api/v3/installments/${id}`, { 
         method: 'DELETE', 
         headers: { 'access_token': process.env.ASAAS_API_KEY } 
       });
-      if (!resp.ok) {
-        const errBody = await resp.json().catch(() => ({ errors: [{ description: 'Erro desconhecido do Asaas' }] }));
-        const errorMsg = errBody.errors?.[0]?.description || 'Falha ao excluir parcelamento no Asaas.';
-        addLog('Asaas', 'Exclusão Parcelamento FALHOU', { id, status: resp.status, error: errorMsg });
-        console.error(`[Exclusão] Asaas rejeitou exclusão do parcelamento ${id}:`, errorMsg);
-        return res.status(400).json({ error: errorMsg });
+      if (resp.ok) {
+        addLog('Asaas', 'Exclusão Parcelamento OK', { id });
+        fallbackToDB = false;
+      } else {
+        const errBody = await resp.json().catch(() => ({}));
+        addLog('Asaas', 'Exclusão Parcelamento FALHOU', { id, status: resp.status, error: errBody.errors?.[0]?.description });
       }
-      addLog('Asaas', 'Exclusão Parcelamento OK', { id });
     } else if (isSinglePayment) {
-      // Deletar pagamento avulso no Asaas
       console.log(`[Exclusão] Deletando pagamento ${id} no Asaas...`);
       const resp = await fetch(`https://sandbox.asaas.com/api/v3/payments/${id}`, { 
         method: 'DELETE', 
         headers: { 'access_token': process.env.ASAAS_API_KEY } 
       });
-      if (!resp.ok) {
-        const errBody = await resp.json().catch(() => ({ errors: [{ description: 'Erro desconhecido do Asaas' }] }));
-        const errorMsg = errBody.errors?.[0]?.description || 'Falha ao excluir pagamento no Asaas.';
-        addLog('Asaas', 'Exclusão Pagamento FALHOU', { id, status: resp.status, error: errorMsg });
-        console.error(`[Exclusão] Asaas rejeitou exclusão do pagamento ${id}:`, errorMsg);
-        return res.status(400).json({ error: errorMsg });
+      if (resp.ok) {
+        addLog('Asaas', 'Exclusão Pagamento OK', { id });
+        fallbackToDB = false;
+      } else {
+        const errBody = await resp.json().catch(() => ({}));
+        return res.status(400).json({ error: errBody.errors?.[0]?.description || 'Falha ao excluir pagamento avulso no Asaas.' });
       }
-      addLog('Asaas', 'Exclusão Pagamento OK', { id });
-    } else {
-      // ID não é do Asaas (pode ser UUID local). Tenta encontrar os IDs Asaas nos registros
-      if (parcelas && parcelas.length > 0) {
-        // Coleta IDs Asaas únicos das parcelas encontradas
-        const instIds = new Set();
-        const payIds = new Set();
-        parcelas.forEach(p => {
-          if (p.asaas_installment_id?.startsWith('inst_') || p.asaas_installment_id?.startsWith('ins_')) instIds.add(p.asaas_installment_id);
-          if (p.asaas_payment_id?.startsWith('pay_')) payIds.add(p.asaas_payment_id);
-        });
+    }
 
-        // Tenta deletar installments primeiro
-        for (const instId of instIds) {
-          const resp = await fetch(`https://sandbox.asaas.com/api/v3/installments/${instId}`, { method: 'DELETE', headers: { 'access_token': process.env.ASAAS_API_KEY } });
-          if (!resp.ok) {
-            const errBody = await resp.json().catch(() => ({}));
-            const errorMsg = errBody.errors?.[0]?.description || 'Falha ao excluir no Asaas.';
-            addLog('Asaas', 'Exclusão FALHOU (por UUID)', { instId, error: errorMsg });
-            return res.status(400).json({ error: errorMsg });
-          }
-          addLog('Asaas', 'Exclusão OK (por UUID)', { instId });
-        }
-        // Depois os avulsos (que não fazem parte de nenhum installment)
-        for (const payId of payIds) {
-          // Verifica se este pay_ já foi deletado como parte de um installment
-          const belongsToInst = parcelas.find(p => p.asaas_payment_id === payId && (instIds.has(p.asaas_installment_id)));
-          if (belongsToInst) continue; // Já foi deletado junto com o installment
+    if (fallbackToDB && parcelas && parcelas.length > 0) {
+      const instIds = new Set();
+      const payIds = new Set();
+      parcelas.forEach(p => {
+        if (p.asaas_installment_id && p.asaas_installment_id !== '') instIds.add(p.asaas_installment_id);
+        if (p.asaas_payment_id?.startsWith('pay_')) payIds.add(p.asaas_payment_id);
+      });
 
-          const resp = await fetch(`https://sandbox.asaas.com/api/v3/payments/${payId}`, { method: 'DELETE', headers: { 'access_token': process.env.ASAAS_API_KEY } });
-          if (!resp.ok) {
-            const errBody = await resp.json().catch(() => ({}));
-            const errorMsg = errBody.errors?.[0]?.description || 'Falha ao excluir no Asaas.';
-            addLog('Asaas', 'Exclusão Pay FALHOU (por UUID)', { payId, error: errorMsg });
-            return res.status(400).json({ error: errorMsg });
-          }
-          addLog('Asaas', 'Exclusão Pay OK (por UUID)', { payId });
-        }
+      for (const instId of instIds) {
+        if (instId === id) continue;
+        const resp = await fetch(`https://sandbox.asaas.com/api/v3/installments/${instId}`, { method: 'DELETE', headers: { 'access_token': process.env.ASAAS_API_KEY } });
+        if (resp.ok) addLog('Asaas', 'Exclusão OK (Resolver DB)', { instId });
+        else addLog('Asaas', 'Exclusão FALHOU (Resolver DB)', { instId });
+      }
+
+      for (const payId of payIds) {
+        const belongsToInst = parcelas.find(p => p.asaas_payment_id === payId && instIds.has(p.asaas_installment_id));
+        if (belongsToInst && instIds.size > 0) continue;
+
+        const resp = await fetch(`https://sandbox.asaas.com/api/v3/payments/${payId}`, { method: 'DELETE', headers: { 'access_token': process.env.ASAAS_API_KEY } });
+        if (resp.ok) addLog('Asaas', 'Exclusão Pay OK (Resolver DB)', { payId });
       }
     }
 
@@ -454,17 +438,22 @@ app.get('/api/parcelamentos/:id/carne', async (req, res) => {
       return res.status(500).json({ error: 'Erro de banco.' });
     }
 
-    let instId = (id.startsWith('inst_') || id.startsWith('ins_')) ? id : null;
+    let instId = (!id.startsWith('pay_')) ? id : null;
     if (!instId && parcelas?.length > 0) {
-      const p = parcelas.find(x => x.asaas_installment_id?.startsWith('inst_') || x.asaas_installment_id?.startsWith('ins_'));
+      const p = parcelas.find(x => x.asaas_installment_id);
       if (p) instId = p.asaas_installment_id;
     }
 
     if (instId) {
+      console.log(`[Carnê] Buscando PDF do parcelamento ${instId} no Asaas...`);
       const ar = await fetch(`https://sandbox.asaas.com/api/v3/installments/${instId}`, { headers: { 'access_token': process.env.ASAAS_API_KEY } });
       if (ar.ok) {
         const data = await ar.json();
+        console.log(`[Carnê] PDF Encontrado:`, data.paymentBookUrl);
         if (data.paymentBookUrl) return res.status(200).json({ status: 'success', type: 'pdf', url: data.paymentBookUrl });
+      } else {
+        const errData = await ar.json().catch(()=>({}));
+        console.error(`[Carnê] Asaas falhou ao buscar installament ${instId}:`, errData);
       }
     }
     

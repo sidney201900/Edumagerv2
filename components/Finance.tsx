@@ -524,25 +524,24 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
     console.log('Item a ser excluído:', paymentToDelete);
 
     // Determine the ID to send
-    let asaasIdToDelete = '';
-    
-    // 1. Se passamos explicitamente o asaasIdParaExcluir (ex: lixeira do grupo de carnê)
-    if ((paymentToDelete as any).asaasIdParaExcluir) {
-      asaasIdToDelete = (paymentToDelete as any).asaasIdParaExcluir;
-    }
-    // 2. Se o usuário estiver na aba de 'Parcelamentos' e clicar na lixeira do grupo (fallback)
-    else if (paymentToDelete.id && typeof paymentToDelete.id === 'string' && (paymentToDelete.id.startsWith('inst_') || paymentToDelete.id.startsWith('ins_'))) {
-      asaasIdToDelete = paymentToDelete.id;
-    } 
-    // 3. Se o usuário escolheu excluir o carnê completo a partir de uma parcela individual
-    else if (deleteType === 'all' && paymentToDelete.installmentId && (paymentToDelete.installmentId.startsWith('inst_') || paymentToDelete.installmentId.startsWith('ins_'))) {
-      asaasIdToDelete = paymentToDelete.installmentId;
-    }
-    // 4. Se estiver nas outras abas (Avulsas/Todas) ou excluir apenas uma parcela do carnê
-    else if (paymentToDelete.asaasPaymentId && paymentToDelete.asaasPaymentId.startsWith('pay_')) {
-      asaasIdToDelete = paymentToDelete.asaasPaymentId;
-    }
-
+    let asaasIdToDelete = '';
+    let isInstallmentPackage = false;
+    
+    // 1. Se passamos explicitamente o asaasIdParaExcluir (ex: lixeira do grupo de carnê)
+    if ((paymentToDelete as any).asaasIdParaExcluir) {
+      asaasIdToDelete = (paymentToDelete as any).asaasIdParaExcluir;
+      isInstallmentPackage = true;
+    }
+    // 2. Se for para excluir TUDO (o pacote agrupado, ou usuário clicou em 'Excluir Carnê Completo' numa parcela)
+    else if (deleteType === 'all') {
+      asaasIdToDelete = paymentToDelete.installmentId || paymentToDelete.id;
+      isInstallmentPackage = true;
+    }
+    // 3. Se for exclusão de apenas uma parcela individual
+    else {
+      asaasIdToDelete = paymentToDelete.asaasPaymentId || paymentToDelete.id;
+      isInstallmentPackage = false;
+    }
     if (!asaasIdToDelete) {
       console.error('Falha ao extrair ID. Objeto paymentToDelete:', paymentToDelete);
       showAlert('Erro', 'ID da cobrança não encontrado.', 'error');
@@ -551,7 +550,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
 
     setIsDeleting(true);
     try {
-      showAlert('Aguarde', (asaasIdToDelete.startsWith('inst_') || asaasIdToDelete.startsWith('ins_')) ? 'Excluindo carnê completo no Asaas...' : 'Excluindo cobrança no Asaas...', 'info');
+      showAlert('Aguarde', isInstallmentPackage ? 'Excluindo carnê completo no Asaas...' : 'Excluindo cobrança no Asaas...', 'info');
       const response = await fetch('/api/excluir_cobranca', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -565,10 +564,10 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
         
         // SO atualiza se backend confirmou (200 OK)
         let updatedPayments = [...data.payments];
-        if (asaasIdToDelete.startsWith('inst_') || asaasIdToDelete.startsWith('ins_')) {
+        if (isInstallmentPackage) {
           updatedPayments = updatedPayments.filter(p => p.installmentId !== asaasIdToDelete);
         } else {
-          updatedPayments = updatedPayments.filter(p => p.asaasPaymentId !== asaasIdToDelete);
+          updatedPayments = updatedPayments.filter(p => p.asaasPaymentId !== asaasIdToDelete && p.id !== asaasIdToDelete);
         }
         updateData({ payments: updatedPayments });
         closeModal();
