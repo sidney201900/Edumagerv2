@@ -20,7 +20,12 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
   const [filterClass, setFilterClass] = useState<string>('all');
   
   // Modais states
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  const [showPrintDropdown, setShowPrintDropdown] = useState(false);
+  const [printSortTarget, setPrintSortTarget] = useState<'dueDate' | ''>('');
+  const [showInstallmentSelectModal, setShowInstallmentSelectModal] = useState(false);
+  const [availableInstallments, setAvailableInstallments] = useState<any[]>([]);
+const [isModalOpen, setIsModalOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -92,7 +97,66 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
     }
   };
 
-  const handlePrintCarne = async (studentId: string) => {
+  
+  const initPrintCarne = (sort: 'dueDate' | '') => {
+    setPrintSortTarget(sort);
+    if (filterStudent === 'all') {
+      setShowPrintCarneModal(true);
+    } else {
+      checkInstallmentsForStudent(filterStudent, sort);
+    }
+  };
+
+  const checkInstallmentsForStudent = (studentId: string, sort: 'dueDate' | '') => {
+    const studentPayments = data.payments.filter(p => p.studentId === studentId && (p.asaasInstallmentId || p.installment));
+    const grouped = {} as Record<string, any>;
+    studentPayments.forEach(p => {
+      const iid = p.asaasInstallmentId || (typeof p.installment === 'object' ? p.installment.id : p.installment);
+      if (!iid) return;
+      if (!grouped[iid]) grouped[iid] = { id: iid, description: p.description || 'Parcelamento', total: 0, count: 0 };
+      grouped[iid].total += p.amount;
+      grouped[iid].count++;
+    });
+    const uniqueInstallments = Object.values(grouped);
+    
+    if (uniqueInstallments.length === 0) {
+      showAlert('Atenção', 'Este aluno não possui nenhum parcelamento ativo no momento.', 'warning');
+      return;
+    }
+    
+    if (uniqueInstallments.length === 1) {
+      executePrintCarne(uniqueInstallments[0].id, sort);
+    } else {
+      setAvailableInstallments(uniqueInstallments);
+      setShowInstallmentSelectModal(true);
+    }
+  };
+
+  const executePrintCarne = async (installmentId: string, sort: 'dueDate' | '') => {
+    setIsFetchingCarne(true);
+    try {
+      let url = `/api/imprimir-carne/${installmentId}`;
+      if (sort) url += `?sort=${sort}&order=ASC`;
+      
+      const response = await fetch(url);
+      const result = await response.json();
+      
+      if (response.ok && result.paymentBookUrl) {
+        window.open(result.paymentBookUrl, '_blank', 'noopener,noreferrer');
+        showAlert('Sucesso', 'Carnê gerado com sucesso!', 'success');
+      } else {
+        showAlert('Erro', result.error || 'Não foi possível gerar a URL do carnê.', 'error');
+      }
+    } catch (error) {
+      console.error(error);
+      showAlert('Erro', 'Ocorreu um erro ao comunicar com Asaas.', 'error');
+    } finally {
+      setIsFetchingCarne(false);
+      setShowInstallmentSelectModal(false);
+    }
+  };
+
+const handlePrintCarne = async (studentId: string) => {
     setIsFetchingCarne(true);
     try {
       const response = await fetch(`/api/alunos/${studentId}/carne`);
@@ -716,12 +780,22 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
           <p className="text-slate-500 text-sm">Gestão de mensalidades vinculadas a contratos e cursos.</p>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          <button 
-            onClick={() => setShowPrintCarneModal(true)}
-            className="flex-1 sm:flex-none bg-white text-indigo-600 border border-indigo-200 px-6 py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-50 transition-all shadow-sm font-bold active:scale-95"
-          >
-            <Printer size={20} /> Imprimir Carnê
-          </button>
+          
+          <div className="relative">
+            <button 
+              onClick={() => setShowPrintDropdown(!showPrintDropdown)}
+              className="flex-1 sm:flex-none bg-white text-indigo-600 border border-indigo-200 px-6 py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-50 transition-all shadow-sm font-bold active:scale-95"
+            >
+              <Printer size={20} /> Imprimir Carnê <ChevronDown size={14} />
+            </button>
+            {showPrintDropdown && (
+              <div className="absolute top-full mt-2 w-64 bg-white border border-slate-200 shadow-xl rounded-xl z-50 py-2">
+                <button onClick={() => { setShowPrintDropdown(false); initPrintCarne(''); }} className="block w-full text-left px-4 py-2 hover:bg-slate-50 text-sm text-slate-700 font-bold transition-colors">Por ordem de impressão</button>
+                <button onClick={() => { setShowPrintDropdown(false); initPrintCarne('dueDate'); }} className="block w-full text-left px-4 py-2 hover:bg-slate-50 text-sm text-slate-700 font-bold transition-colors">Por ordem de vencimento</button>
+              </div>
+            )}
+          </div>
+
           <button 
             onClick={() => setIsModalOpen(true)}
             className="flex-1 sm:flex-none bg-indigo-600 text-white px-6 py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all shadow-lg font-bold active:scale-95"
@@ -1404,11 +1478,11 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
                 <button 
                   type="button"
                   onClick={() => {
-                    if (selectedStudentForCarne) {
-                      handlePrintCarne(selectedStudentForCarne);
-                      setShowPrintCarneModal(false);
-                      setSelectedStudentForCarne('');
-                    } else {
+                      if (selectedStudentForCarne) {
+                        checkInstallmentsForStudent(selectedStudentForCarne, printSortTarget);
+                        setShowPrintCarneModal(false);
+                        setSelectedStudentForCarne('');
+                      } else {
                       showAlert('Atenção', 'Selecione um aluno primeiro.', 'warning');
                     }
                   }}

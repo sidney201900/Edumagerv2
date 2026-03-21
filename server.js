@@ -553,6 +553,45 @@ async function startServer() {
     const vite = await import('vite').then(m => m.createServer({ server: { middlewareMode: true }, appType: 'spa' }));
     app.use(vite.middlewares);
   }
-  app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Servidor na porta ${PORT}`));
+  
+// NOVO ENDPOINT: Imprimir Carnê pelo UUID do Parcelamento
+app.get('/api/imprimir-carne/:installmentId', async (req, res) => {
+  try {
+    const { installmentId } = req.params;
+    const { sort, order } = req.query;
+    
+    // Extrai o UUID puro, removendo "ins_" ou "inst_" se houver
+    const cleanId = installmentId.replace(/^(ins_|inst_)/, '');
+    
+    let asaasUrl = `${process.env.ASAAS_API_URL}/v3/installments/${cleanId}/paymentBook`;
+    const asaasParams = new URLSearchParams();
+    if (sort) asaasParams.append('sort', sort);
+    if (order) asaasParams.append('order', order);
+    
+    if (asaasParams.toString()) {
+      asaasUrl += `?${asaasParams.toString()}`;
+    }
+
+    const response = await fetch(asaasUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'access_token': process.env.ASAAS_API_KEY
+      }
+    });
+
+    const result = await response.json();
+    
+    if (response.ok) {
+      res.json(result);
+    } else {
+      res.status(response.status).json(result);
+    }
+  } catch (error) {
+    console.error('Erro ao gerar carnê impresso:', error);
+    res.status(500).json({ error: 'Erro interno ao comunicar com Asaas.' });
+  }
+});
+app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Servidor na porta ${PORT}`));
 }
 startServer();
