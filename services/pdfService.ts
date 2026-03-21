@@ -10,24 +10,24 @@ const addImageProportional = async (doc: any, src: string, x: number, y: number,
   try {
     const { width, height } = await getImageDimensions(src);
     const ratio = width / height;
-    
+
     let finalW = maxW;
     let finalH = maxW / ratio;
-    
+
     if (finalH > maxH) {
       finalH = maxH;
       finalW = maxH * ratio;
     }
-    
+
     // Center in the box
     const offsetX = (maxW - finalW) / 2;
     const offsetY = (maxH - finalH) / 2;
-    
+
     let format = 'JPEG';
     const lowerSrc = src.toLowerCase();
     if (lowerSrc.includes('png')) format = 'PNG';
     else if (lowerSrc.includes('webp')) format = 'WEBP';
-    
+
     doc.addImage(src, format, x + offsetX, y + offsetY, finalW, finalH, undefined, 'FAST');
     return { width: finalW, height: finalH };
   } catch (e) {
@@ -48,7 +48,7 @@ const addStudentPhoto3x4 = async (doc: any, src: string, x: number, y: number) =
       // 300x400 for 300 DPI approx (30mm x 40mm)
       const targetW = 354; // 30mm at 300 DPI is approx 354px
       const targetH = 472; // 40mm at 300 DPI is approx 472px
-      
+
       canvas.width = targetW;
       canvas.height = targetH;
       const ctx = canvas.getContext('2d');
@@ -77,7 +77,7 @@ const addStudentPhoto3x4 = async (doc: any, src: string, x: number, y: number) =
       }
 
       ctx.drawImage(img, sourceX, sourceY, sourceW, sourceH, 0, 0, targetW, targetH);
-      
+
       // Compress to JPEG with 0.6 quality for instant opening
       const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
       doc.addImage(dataUrl, 'JPEG', x, y, 30, 40, undefined, 'FAST');
@@ -93,7 +93,7 @@ const addStudentPhoto3x4 = async (doc: any, src: string, x: number, y: number) =
  */
 export const addHeader = async (doc: any, schoolData: SchoolData) => {
   const profile = schoolData.profile;
-  
+
   if (schoolData.logo) {
     await addImageProportional(doc, schoolData.logo, 20, 10, 25, 25);
   }
@@ -102,14 +102,14 @@ export const addHeader = async (doc: any, schoolData: SchoolData) => {
   doc.setTextColor(0);
   doc.setFont('helvetica', 'bold');
   doc.text(profile.name || 'EduManager School', 50, 18);
-  
+
   doc.setFontSize(8);
   doc.setTextColor(0);
   doc.setFont('helvetica', 'normal');
   doc.text(`CNPJ: ${profile.cnpj || 'Não informado'}`, 50, 23);
   doc.text(profile.address || '', 50, 27);
   doc.text(`${profile.phone || ''} ${profile.email ? '| ' + profile.email : ''}`, 50, 31);
-  
+
   doc.setDrawColor(0);
   doc.setLineWidth(0.1);
   doc.line(20, 38, 190, 38);
@@ -162,9 +162,9 @@ const addPageNumbers = (doc: any) => {
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.text(
-      `Página ${i} de ${pageCount}`, 
-      doc.internal.pageSize.width / 2, 
-      doc.internal.pageSize.height - 10, 
+      `Página ${i} de ${pageCount}`,
+      doc.internal.pageSize.width / 2,
+      doc.internal.pageSize.height - 10,
       { align: 'center' }
     );
   }
@@ -181,7 +181,7 @@ const drawJustifiedText = async (doc: any, text: string, x: number, y: number, m
 
   for (const p of paragraphs) {
     const isClause = p.toUpperCase().startsWith('CLÁUSULA') || p.toUpperCase().startsWith('CLAUSULA');
-    
+
     // Check for page break before paragraph
     if (currentY > pageHeight - 30) {
       doc.addPage();
@@ -197,7 +197,7 @@ const drawJustifiedText = async (doc: any, text: string, x: number, y: number, m
     const currentMaxWidth = isClause ? maxWidth : maxWidth - 10;
 
     const lines = doc.splitTextToSize(p, currentMaxWidth);
-    
+
     for (let i = 0; i < lines.length; i++) {
       // Check for page break before line
       if (currentY > pageHeight - 20) {
@@ -219,7 +219,7 @@ const drawJustifiedText = async (doc: any, text: string, x: number, y: number, m
           const totalWordsWidth = words.reduce((sum: number, word: string) => sum + doc.getTextWidth(word), 0);
           const totalSpacing = currentMaxWidth - totalWordsWidth;
           const spacingPerWord = totalSpacing / (words.length - 1);
-          
+
           let currentX = startX;
           for (let j = 0; j < words.length; j++) {
             doc.text(words[j], currentX, currentY);
@@ -244,7 +244,7 @@ const addContractHeader = async (doc: any, schoolData: SchoolData) => {
   const margin = 20; // 2cm sides
   const pageWidth = doc.internal.pageSize.width;
   const centerX = pageWidth / 2;
-  
+
   let currentY = 15; // 1.5cm top for header content
 
   if (schoolData.logo) {
@@ -257,23 +257,23 @@ const addContractHeader = async (doc: any, schoolData: SchoolData) => {
   doc.setTextColor(0);
   doc.setFont('helvetica', 'bold');
   doc.text(profile.name || 'Microtec Informática Cursos', centerX, currentY, { align: 'center' });
-  
+
   currentY += 5;
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
-  
+
   const infoLine1 = `CNPJ: ${profile.cnpj || 'Não informado'} | ${profile.address || ''}`;
   doc.text(infoLine1, centerX, currentY, { align: 'center' });
-  
+
   currentY += 4;
   const infoLine2 = `${profile.phone || ''} ${profile.email ? '| ' + profile.email : ''}`;
   doc.text(infoLine2, centerX, currentY, { align: 'center' });
-  
+
   currentY += 6;
   doc.setDrawColor(0);
   doc.setLineWidth(0.5);
   doc.line(margin, currentY, pageWidth - margin, currentY);
-  
+
   return currentY + 10; // Return Y position for the next content
 };
 
@@ -301,7 +301,7 @@ const drawContractText = async (doc: any, text: string, x: number, y: number, ma
       }
       continue;
     }
-    
+
     // If line starts with CLÁUSULA, it's a new paragraph
     if (/^(CLÁUSULA|CLAUSULA)\s+\d+/i.test(trimmed)) {
       if (currentParagraph) {
@@ -329,7 +329,7 @@ const drawContractText = async (doc: any, text: string, x: number, y: number, ma
 
   for (const p of paragraphs) {
     const isClause = /^(CLÁUSULA|CLAUSULA)/i.test(p);
-    
+
     if (currentY > pageHeight - bottomMargin - 10) {
       doc.addPage();
       currentY = await addContractHeader(doc, schoolData);
@@ -340,7 +340,7 @@ const drawContractText = async (doc: any, text: string, x: number, y: number, ma
 
     let title = "";
     let restOfText = p;
-    
+
     if (isClause) {
       const match = p.match(/^(CLÁUSULA\s+\d+.*?[-–—:]\s*|CLAUSULA\s+\d+.*?[-–—:]\s*)/i);
       if (match) {
@@ -370,7 +370,7 @@ const drawContractText = async (doc: any, text: string, x: number, y: number, ma
     }
 
     const lines = doc.splitTextToSize(restOfText, currentMaxWidth);
-    
+
     for (let i = 0; i < lines.length; i++) {
       if (currentY > pageHeight - bottomMargin) {
         doc.addPage();
@@ -391,7 +391,7 @@ const drawContractText = async (doc: any, text: string, x: number, y: number, ma
           const totalWordsWidth = words.reduce((sum: number, word: string) => sum + doc.getTextWidth(word), 0);
           const totalSpacing = currentMaxWidth - totalWordsWidth;
           const spacingPerWord = totalSpacing / (words.length - 1);
-          
+
           let currentX = startX;
           for (let j = 0; j < words.length; j++) {
             doc.text(words[j], currentX, currentY);
@@ -414,27 +414,27 @@ export const pdfService = {
     const startY = await addHeader(doc, schoolData);
     const cls = schoolData.classes.find(c => c.id === student.classId);
     const course = schoolData.courses.find(c => c.id === cls?.courseId);
-    
+
     // Title and Date (Centered)
     doc.setFontSize(16);
     doc.setTextColor(0);
     doc.setFont('helvetica', 'bold');
     doc.text('Ficha de Matrícula', 105, startY + 10, { align: 'center' });
-    
+
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 105, startY + 16, { align: 'center' });
-    
+
     // Photo Positioning - Top Right (Standard 3x4cm = 30x40mm)
     const photoX = 155;
     const photoY = startY + 25;
     const photoW = 30;
     const photoH = 40;
-    
+
     if (student.photo) {
       await addStudentPhoto3x4(doc, student.photo, photoX, photoY);
     }
-    
+
     // Border around photo area
     doc.setDrawColor(0);
     doc.setLineWidth(0.1);
@@ -453,10 +453,10 @@ export const pdfService = {
     doc.setTextColor(0);
     doc.setFont('helvetica', 'bold');
     doc.text('Dados do Aluno', labelX, currentY);
-    
+
     currentY += 8;
     doc.setFontSize(10);
-    
+
     const drawField = (label: string, value: string, y: number) => {
       doc.setFont('helvetica', 'normal');
       doc.text(`${label}: ${value || '-'}`, labelX, y);
@@ -469,7 +469,7 @@ export const pdfService = {
     currentY = drawField('Data de Nascimento', student.birthDate ? new Date(student.birthDate).toLocaleDateString('pt-BR') : '', currentY);
     currentY = drawField('Email', student.email, currentY);
     currentY = drawField('Telefone', student.phone, currentY);
-    
+
     currentY += 4;
 
     // 2. Endereço
@@ -482,7 +482,7 @@ export const pdfService = {
     doc.text(`${student.addressStreet || ''}${student.addressNumber ? `, ${student.addressNumber}` : ''} - ${student.addressNeighborhood || ''}`, labelX, currentY);
     currentY += 6;
     doc.text(`${student.addressCity || ''} - ${student.addressState || ''} CEP: ${student.addressZip || ''}`, labelX, currentY);
-    
+
     currentY += 10;
 
     // 3. Dados do Curso
@@ -503,7 +503,7 @@ export const pdfService = {
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
     doc.text('Termos e Condições', labelX, currentY);
-    
+
     currentY += 8;
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
@@ -517,7 +517,7 @@ export const pdfService = {
 
     doc.setDrawColor(0);
     doc.setLineWidth(0.2);
-    
+
     // Signer Signature
     const sigY = pageHeight - 45;
     doc.line(20, sigY, 90, sigY);
@@ -555,7 +555,7 @@ export const pdfService = {
     doc.setFontSize(12);
     doc.setTextColor(0);
     doc.text('Contratos Ativos', 20, startY + 20);
-    
+
     doc.autoTable({
       startY: startY + 25,
       margin: { top: 45 },
@@ -595,14 +595,14 @@ export const pdfService = {
 
   generatePaymentReceiptPDF: async (payment: Payment, student: Student, schoolData: SchoolData) => {
     const doc = new jsPDF() as any;
-    
+
     doc.setDrawColor(0);
     doc.setLineWidth(0.5);
     doc.rect(10, 10, 190, 140); // Border
 
     const profile = schoolData.profile;
     if (schoolData.logo) {
-       await addImageProportional(doc, schoolData.logo, 20, 15, 20, 20);
+      await addImageProportional(doc, schoolData.logo, 20, 15, 20, 20);
     }
     doc.setFontSize(12);
     doc.setTextColor(0);
@@ -624,13 +624,13 @@ export const pdfService = {
     doc.text(`Recebemos de: ${student.name}`, 20, 70);
     doc.text(`CPF: ${student.cpf || '---'}`, 20, 76);
     doc.text(`A quantia de: R$ ${payment.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 20, 85);
-    
-    const typeLabel = payment.type === 'registration' ? 'Taxa de Matrícula' : 
-                      payment.type === 'monthly' ? 'Mensalidade do Curso' : 'Outros Serviços';
-    
+
+    const typeLabel = payment.type === 'registration' ? 'Taxa de Matrícula' :
+      payment.type === 'monthly' ? 'Mensalidade do Curso' : 'Outros Serviços';
+
     doc.text(`Referente a: ${typeLabel} ${payment.description ? `(${payment.description})` : ''}`, 20, 95);
     doc.text(`Data de Vencimento: ${new Date(payment.dueDate).toLocaleDateString('pt-BR')}`, 20, 105);
-    
+
     if (payment.status === 'paid' && payment.paidDate) {
       doc.setFontSize(12);
       doc.setTextColor(0);
@@ -651,27 +651,27 @@ export const pdfService = {
       unit: 'mm',
       format: 'a4'
     }) as any;
-    
+
     let currentY = await addContractHeader(doc, schoolData);
-    
+
     // Title
     doc.setFontSize(14);
     doc.setTextColor(0);
     doc.setFont('helvetica', 'bold');
     doc.text('CONTRATO DE PRESTAÇÃO DE SERVIÇOS EDUCACIONAIS', 105, currentY, { align: 'center' });
-    
+
     currentY += 10;
-    
+
     // Contract Header Info
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    
+
     doc.text(`DATA DE EMISSÃO: ${new Date(contract.createdAt).toLocaleDateString('pt-BR')}`, 20, currentY);
     currentY += 6;
     doc.text(`CONTRATANTE: ${student.name.toUpperCase()}`, 20, currentY);
     currentY += 6;
     doc.text(`CPF: ${student.cpf || '---'}`, 20, currentY);
-    
+
     currentY += 10;
 
     // Draw Justified Content with Pagination
@@ -679,7 +679,7 @@ export const pdfService = {
     const pageWidth = doc.internal.pageSize.width;
     const maxWidth = pageWidth - (margin * 2);
     const lineHeight = 5.5; // 1.5 spacing approx for 10pt font
-    
+
     currentY = await drawContractText(doc, contract.content, margin, currentY, maxWidth, lineHeight, schoolData);
 
     // Signatures
@@ -697,7 +697,7 @@ export const pdfService = {
     // Signature Block - Unbreakable, Side by Side
     doc.setDrawColor(0);
     doc.setLineWidth(0.2);
-    
+
     const col1X = margin;
     const col1Width = (maxWidth / 2) - 5;
     const col2X = margin + (maxWidth / 2) + 5;
@@ -707,15 +707,15 @@ export const pdfService = {
     doc.line(col1X, currentY, col1X + col1Width, currentY);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
-    
-    const signerText = signer.label === 'ASSINATURA DO ALUNO' 
+
+    const signerText = signer.label === 'ASSINATURA DO ALUNO'
       ? `Assinatura do Aluno: ${signer.name.toUpperCase()}`
       : `Assinatura do Responsável Legal: ${signer.name.toUpperCase()}`;
-      
+
     doc.text(signerText, col1X + (col1Width / 2), currentY + 5, { align: 'center' });
     doc.setFont('helvetica', 'normal');
     doc.text(`CPF: ${signer.cpf || '---'}`, col1X + (col1Width / 2), currentY + 10, { align: 'center' });
-    
+
     // School Signature (Right Column)
     doc.line(col2X, currentY, col2X + col2Width, currentY);
     doc.setFont('helvetica', 'bold');
@@ -738,13 +738,13 @@ export const pdfService = {
     doc.setFontSize(16);
     doc.setTextColor(0);
     doc.text(`Relatório de Turma: ${cls.name}`, 105, startY + 5, { align: 'center' });
-    
+
     doc.setFontSize(10);
     doc.setTextColor(0);
     doc.text(`Curso: ${course?.name || 'N/A'}`, 20, startY + 15);
     doc.text(`Professor: ${cls.teacher}`, 20, startY + 22);
     doc.text(`Horário: ${cls.schedule}`, 20, startY + 29);
-    
+
     doc.autoTable({
       startY: startY + 35,
       margin: { top: 45 },
@@ -798,11 +798,11 @@ export const pdfService = {
   generateFullSchoolReportPDF: async (schoolData: SchoolData) => {
     const doc = new jsPDF() as any;
     const startY = await addHeader(doc, schoolData);
-    
+
     doc.setFontSize(18);
     doc.setTextColor(0);
     doc.text('Relatório Consolidado', 105, startY + 5, { align: 'center' });
-    
+
     doc.setFontSize(12);
     doc.text('Visão Geral', 20, startY + 20);
     doc.setFontSize(10);
@@ -834,87 +834,87 @@ export const pdfService = {
     const startY = await addHeader(doc, schoolData);
     const cls = schoolData.classes.find(c => c.id === student.classId);
     const course = schoolData.courses.find(c => c.id === cls?.courseId);
-    
+
     // Title
     doc.setFontSize(16);
     doc.setTextColor(0);
     doc.setFont('helvetica', 'bold');
     doc.text('TERMO DE CANCELAMENTO DE MATRÍCULA', 105, startY + 10, { align: 'center' });
-    
+
     let currentY = startY + 25;
-    
+
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.text('Escola:', 20, currentY);
     doc.setFont('helvetica', 'normal');
     doc.text(schoolData.profile.name || 'Microtec Informática Cursos', 38, currentY);
-    
+
     currentY += 15;
-    
+
     // Student Data
     doc.setFont('helvetica', 'bold');
     doc.text('Dados do Aluno:', 20, currentY);
     currentY += 8;
-    
+
     doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
     doc.text(`Nome: ${student.name} | CPF: ${student.cpf || 'Não informado'}`, 20, currentY);
     currentY += 6;
     doc.text(`Curso: ${course?.name || 'Não informado'} | Turma: ${cls?.name || 'Não informado'}`, 20, currentY);
-    
+
     currentY += 12;
-    
+
     // Guardian Data
     if (student.guardianName) {
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
       doc.text('Dados do Responsável (se menor de idade):', 20, currentY);
       currentY += 8;
-      
+
       doc.setFontSize(11);
       doc.setFont('helvetica', 'normal');
       doc.text(`Nome: ${student.guardianName} | CPF: ${student.guardianCpf || 'Não informado'}`, 20, currentY);
       currentY += 12;
     }
-    
+
     // Reason
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.text('Motivo do Cancelamento:', 20, currentY);
     currentY += 8;
-    
+
     doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
     const splitReason = doc.splitTextToSize(cancellationReason, 170);
     doc.text(splitReason, 20, currentY);
     currentY += (splitReason.length * 6) + 10;
-    
+
     // Term Text
     const termText1 = 'Pelo presente termo, o(a) aluno(a) ou seu responsável legal acima qualificado, solicita formalmente o CANCELAMENTO DA MATRÍCULA no curso especificado.';
     const termText2 = 'Declara estar ciente de que o cancelamento encerra o vínculo educacional a partir desta data, não isentando o contratante de eventuais pendências financeiras adquiridas e vencidas até o presente momento, conforme contrato de prestação de serviços educacionais assinado no ato da matrícula.';
-    
+
     const splitTerm1 = doc.splitTextToSize(termText1, 170);
     doc.text(splitTerm1, 20, currentY);
     currentY += (splitTerm1.length * 6) + 4;
-    
+
     const splitTerm2 = doc.splitTextToSize(termText2, 170);
     doc.text(splitTerm2, 20, currentY);
     currentY += (splitTerm2.length * 6) + 20;
-    
+
     // Date and Signatures
     const dateStr = new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
     doc.text(`Redenção - CE, ${dateStr}.`, 20, currentY);
-    
+
     currentY += 30;
-    
+
     doc.line(20, currentY, 90, currentY);
     doc.line(120, currentY, 190, currentY);
-    
+
     currentY += 5;
     doc.setFontSize(10);
     doc.text('Assinatura do Aluno ou Responsável Legal', 55, currentY, { align: 'center' });
     doc.text(`${schoolData.profile.name || 'Microtec Informática Cursos'} (Administração)`, 155, currentY, { align: 'center' });
-    
+
     doc.save(`termo_cancelamento_${student.name.replace(/\s+/g, '_')}.pdf`);
   }
 };

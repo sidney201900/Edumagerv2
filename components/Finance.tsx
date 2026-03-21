@@ -18,19 +18,19 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
   const [expandedInstallments, setExpandedInstallments] = useState<string[]>([]);
   const [filterStudent, setFilterStudent] = useState<string>('all');
   const [filterClass, setFilterClass] = useState<string>('all');
-  
+
   // Modais states
-  
+
   const [showPrintDropdown, setShowPrintDropdown] = useState(false);
   const [printSortTarget, setPrintSortTarget] = useState<'dueDate' | ''>('');
   const [showInstallmentSelectModal, setShowInstallmentSelectModal] = useState(false);
   const [availableInstallments, setAvailableInstallments] = useState<any[]>([]);
-const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showPrintCarneModal, setShowPrintCarneModal] = useState(false);
-  
+
   // Selection states
   const [selectedStudentHistory, setSelectedStudentHistory] = useState<Student | null>(null);
   const [selectedStudentForCarne, setSelectedStudentForCarne] = useState<string>('');
@@ -58,7 +58,7 @@ const [isModalOpen, setIsModalOpen] = useState(false);
   const handleOpenPaymentLink = async (id: string, type: 'boleto' | 'recibo' | 'carne') => {
     try {
       showAlert('Aguarde', `Buscando ${type}...`, 'info');
-      
+
       if (type === 'carne') {
         const response = await fetch(`/api/parcelamentos/${id}/carne`);
         const result = await response.json();
@@ -97,7 +97,7 @@ const [isModalOpen, setIsModalOpen] = useState(false);
     }
   };
 
-  
+
   const initPrintCarne = (sort: 'dueDate' | '') => {
     setPrintSortTarget(sort);
     if (filterStudent === 'all') {
@@ -108,22 +108,22 @@ const [isModalOpen, setIsModalOpen] = useState(false);
   };
 
   const checkInstallmentsForStudent = (studentId: string, sort: 'dueDate' | '') => {
-    const studentPayments = data.payments.filter(p => p.studentId === studentId && (p.asaasInstallmentId || p.installment));
+    const studentPayments = data.payments.filter(p => p.studentId === studentId && (p.asaasInstallmentId || p.installmentId || p.installment));
     const grouped = {} as Record<string, any>;
     studentPayments.forEach(p => {
-      const iid = p.asaasInstallmentId || (typeof p.installment === 'object' ? p.installment.id : p.installment);
+      const iid = p.asaasInstallmentId || p.installmentId || (typeof p.installment === 'object' ? p.installment.id : p.installment);
       if (!iid) return;
       if (!grouped[iid]) grouped[iid] = { id: iid, description: p.description || 'Parcelamento', total: 0, count: 0 };
       grouped[iid].total += p.amount;
       grouped[iid].count++;
     });
     const uniqueInstallments = Object.values(grouped);
-    
+
     if (uniqueInstallments.length === 0) {
       showAlert('Atenção', 'Este aluno não possui nenhum parcelamento ativo no momento.', 'warning');
       return;
     }
-    
+
     if (uniqueInstallments.length === 1) {
       executePrintCarne(uniqueInstallments[0].id, sort);
     } else {
@@ -132,31 +132,28 @@ const [isModalOpen, setIsModalOpen] = useState(false);
     }
   };
 
-  const executePrintCarne = async (installmentId: string, sort: 'dueDate' | '') => {
-    setIsFetchingCarne(true);
+  // Função reutilizável para a impressão do carnê
+  // Recebe o ID do parcelamento (ex: UUID puro), faz o acesso à rota do back-end que retorna o PDF binário diretamente.
+  const executePrintCarne = async (installmentId: string, sort?: string) => {
     try {
-      let url = `/api/imprimir-carne/${installmentId}`;
+      // Garante que é o UUID puro (remove ins_ caso exista)
+      const cleanId = installmentId.replace(/^(ins_|inst_)/, '');
+
+      let url = `/api/imprimir-carne/${cleanId}`;
       if (sort) url += `?sort=${sort}&order=ASC`;
-      
-      const response = await fetch(url);
-      const result = await response.json();
-      
-      if (response.ok && result.paymentBookUrl) {
-        window.open(result.paymentBookUrl, '_blank', 'noopener,noreferrer');
-        showAlert('Sucesso', 'Carnê gerado com sucesso!', 'success');
-      } else {
-        showAlert('Erro', result.error || 'Não foi possível gerar a URL do carnê.', 'error');
-      }
+
+      // Abre a rota (que retorna Content-Type: application/pdf) em uma nova aba
+      window.open(url, '_blank', 'noopener,noreferrer');
+      showAlert('Sucesso', 'Abrindo o carnê...', 'info');
     } catch (error) {
       console.error(error);
-      showAlert('Erro', 'Ocorreu um erro ao comunicar com Asaas.', 'error');
+      showAlert('Erro', 'Ocorreu um erro ao tentar abrir o carnê.', 'error');
     } finally {
-      setIsFetchingCarne(false);
       setShowInstallmentSelectModal(false);
     }
   };
 
-const handlePrintCarne = async (studentId: string) => {
+  const handlePrintCarne = async (studentId: string) => {
     setIsFetchingCarne(true);
     try {
       const response = await fetch(`/api/alunos/${studentId}/carne`);
@@ -189,7 +186,7 @@ const handlePrintCarne = async (studentId: string) => {
 
   const syncAsaasPayments = async () => {
     if (!isSupabaseConfigured() || isSyncing) return;
-    
+
     setIsSyncing(true);
     try {
       const { data: cloudPayments, error } = await supabase
@@ -206,22 +203,22 @@ const handlePrintCarne = async (studentId: string) => {
             if (p.asaasPaymentId) {
               return cp.asaas_payment_id === p.asaasPaymentId;
             }
-            return cp.aluno_id === p.studentId && 
-                   Math.abs(cp.valor - p.amount) < 0.01 && 
-                   cp.vencimento === p.dueDate;
+            return cp.aluno_id === p.studentId &&
+              Math.abs(cp.valor - p.amount) < 0.01 &&
+              cp.vencimento === p.dueDate;
           });
-          
+
           if (match) {
             const statusStr = (match.status || '').toLowerCase();
-            const newStatus = statusStr === 'pago' ? 'paid' : 
-                             statusStr === 'atrasado' ? 'overdue' : 
-                             statusStr === 'cancelado' ? 'cancelled' : 'pending';
-            
+            const newStatus = statusStr === 'pago' ? 'paid' :
+              statusStr === 'atrasado' ? 'overdue' :
+                statusStr === 'cancelado' ? 'cancelled' : 'pending';
+
             if (p.status !== newStatus || p.amount !== match.valor || p.installmentId !== (match.asaas_installment_id || match.installment) || p.asaasPaymentUrl !== match.link_boleto || p.asaasPaymentId !== match.asaas_payment_id) {
               updatedCount++;
-              return { 
-                ...p, 
-                status: newStatus as any, 
+              return {
+                ...p,
+                status: newStatus as any,
                 amount: match.valor,
                 paidDate: match.data_pagamento || p.paidDate,
                 installmentId: match.asaas_installment_id || match.installment || p.installmentId,
@@ -235,13 +232,13 @@ const handlePrintCarne = async (studentId: string) => {
 
         if (updatedCount > 0) {
           updateData({ payments: updatedPayments });
-          
+
           // Check if any was updated to overdue
           const hasOverdue = updatedPayments.some((p, idx) => {
             const oldP = currentPayments[idx];
             return oldP && oldP.status !== 'overdue' && p.status === 'overdue';
           });
-          
+
           const hasPaid = updatedPayments.some((p, idx) => {
             const oldP = currentPayments[idx];
             return oldP && oldP.status !== 'paid' && p.status === 'paid';
@@ -270,7 +267,7 @@ const handlePrintCarne = async (studentId: string) => {
   const [dueDateDisplay, setDueDateDisplay] = useState(new Date().toLocaleDateString('pt-BR'));
   const [selectedItemId, setSelectedItemId] = useState<string>('');
   const [selectedItemType, setSelectedItemType] = useState<'course' | 'handout' | ''>('');
-  
+
   const [formData, setFormData] = useState<Omit<Payment, 'id' | 'status' | 'paidDate' | 'lateFee'> & { fine: number }>({
     studentId: '',
     amount: 150,
@@ -331,7 +328,7 @@ const handlePrintCarne = async (studentId: string) => {
     .filter(p => {
       const statusMatch = filterStatus === 'all' || p.status === filterStatus;
       const studentMatch = filterStudent === 'all' || p.studentId === filterStudent;
-      
+
       let classMatch = true;
       if (filterClass !== 'all') {
         const student = data.students.find(s => s.id === p.studentId);
@@ -351,7 +348,7 @@ const handlePrintCarne = async (studentId: string) => {
 
   const groupedInstallments = useMemo(() => {
     if (filterType !== 'parcelamentos') return [];
-    
+
     const groups: Record<string, Payment[]> = {};
     filteredPayments.forEach(p => {
       if (p.installmentId) {
@@ -359,7 +356,7 @@ const handlePrintCarne = async (studentId: string) => {
         groups[p.installmentId].push(p);
       }
     });
-    
+
     return Object.entries(groups).map(([id, payments]) => {
       const sorted = payments.sort((a, b) => (a.installmentNumber || 0) - (b.installmentNumber || 0));
       return {
@@ -375,7 +372,7 @@ const handlePrintCarne = async (studentId: string) => {
   }, [filteredPayments, filterType]);
 
   const toggleInstallment = (id: string) => {
-    setExpandedInstallments(prev => 
+    setExpandedInstallments(prev =>
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
     );
   };
@@ -383,10 +380,10 @@ const handlePrintCarne = async (studentId: string) => {
   const handleItemSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
     setSelectedItemId(val);
-    
+
     if (!val) {
       setSelectedItemType('');
-      setFormData(prev => ({...prev, amount: 0, description: ''}));
+      setFormData(prev => ({ ...prev, amount: 0, description: '' }));
       return;
     }
 
@@ -407,8 +404,8 @@ const handlePrintCarne = async (studentId: string) => {
       if (course) {
         setSelectedItemType('course');
         setFormData(prev => ({
-          ...prev, 
-          amount: course.monthlyFee, 
+          ...prev,
+          amount: course.monthlyFee,
           description: `Mensalidade - ${course.name}`,
           type: 'monthly',
           fine: course.finePercentage || 0,
@@ -421,8 +418,8 @@ const handlePrintCarne = async (studentId: string) => {
       if (handout) {
         setSelectedItemType('handout');
         setFormData(prev => ({
-          ...prev, 
-          amount: handout.price, 
+          ...prev,
+          amount: handout.price,
           description: `Apostila - ${handout.name}`,
           type: 'other',
           fine: handout.finePercentage || 0,
@@ -434,7 +431,7 @@ const handlePrintCarne = async (studentId: string) => {
 
   const handleCreatePayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.studentId || formData.amount <= 0) {
       showAlert('Atenção', '⚠️ Por favor, selecione um aluno e informe um valor válido.', 'warning');
       return;
@@ -447,10 +444,10 @@ const handlePrintCarne = async (studentId: string) => {
     }
 
     const newPayments: Payment[] = [];
-    
+
     let baseDateStr = formData.dueDate;
     if (dueDateDisplay.length === 10) {
-        baseDateStr = dateBrToIso(dueDateDisplay);
+      baseDateStr = dateBrToIso(dueDateDisplay);
     }
     const baseDate = new Date(baseDateStr);
 
@@ -463,7 +460,7 @@ const handlePrintCarne = async (studentId: string) => {
 
       const { fine, ...rest } = formData;
       const paymentDueDate = dueDate.toISOString().split('T')[0];
-      
+
       newPayments.push({
         ...rest,
         lateFee: fine,
@@ -473,7 +470,7 @@ const handlePrintCarne = async (studentId: string) => {
         status: 'pending',
         installmentNumber: manualInstallments > 1 ? i + 1 : undefined,
         totalInstallments: manualInstallments > 1 ? manualInstallments : undefined,
-        description: manualInstallments > 1 
+        description: manualInstallments > 1
           ? `${formData.description || 'Mensalidade'} (${i + 1}/${manualInstallments})`
           : formData.description
       });
@@ -482,7 +479,7 @@ const handlePrintCarne = async (studentId: string) => {
     try {
       const rawCpf = (student.cpf || student.guardianCpf || '').replace(/\D/g, '');
       const isoDueDate = newPayments[0].dueDate;
-      
+
       const response = await fetch('/api/gerar_cobranca', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -509,7 +506,7 @@ const handlePrintCarne = async (studentId: string) => {
 
       if (response.ok) {
         const asaasData = await response.json();
-        
+
         if (asaasData.payments && asaasData.payments.length > 0) {
           newPayments.forEach((p, idx) => {
             // Se o Asaas retornou menos parcelas que o esperado, usa a última disponível
@@ -533,9 +530,9 @@ const handlePrintCarne = async (studentId: string) => {
     if (selectedItemType === 'handout' && newPayments.length > 0) {
       const handoutId = selectedItemId.replace('handout_', '');
       const firstPayment = newPayments[0];
-      
+
       const existingDeliveryIndex = newDeliveries.findIndex(d => d.studentId === student.id && d.handoutId === handoutId);
-      
+
       if (existingDeliveryIndex >= 0) {
         newDeliveries[existingDeliveryIndex] = {
           ...newDeliveries[existingDeliveryIndex],
@@ -555,7 +552,7 @@ const handlePrintCarne = async (studentId: string) => {
       }
     }
 
-    updateData({ 
+    updateData({
       payments: [...data.payments, ...newPayments],
       ...(selectedItemType === 'handout' ? { handoutDeliveries: newDeliveries } : {})
     });
@@ -570,7 +567,7 @@ const handlePrintCarne = async (studentId: string) => {
       setShowHistoryModal(false);
       setShowDeleteModal(false);
       setIsClosing(false);
-      
+
       setManualInstallments(1);
       const today = new Date();
       setDueDateDisplay(today.toLocaleDateString('pt-BR'));
@@ -598,7 +595,7 @@ const handlePrintCarne = async (studentId: string) => {
     // Determine the ID to send
     let asaasIdToDelete = '';
     let isInstallmentPackage = false;
-    
+
     // 1. Se passamos explicitamente o asaasIdParaExcluir (ex: lixeira do grupo de carnê)
     if ((paymentToDelete as any).asaasIdParaExcluir) {
       asaasIdToDelete = (paymentToDelete as any).asaasIdParaExcluir;
@@ -633,7 +630,7 @@ const handlePrintCarne = async (studentId: string) => {
 
       if (response.ok) {
         showAlert('Sucesso', 'Cobrança excluída com sucesso.', 'success');
-        
+
         // SO atualiza se backend confirmou (200 OK)
         let updatedPayments = [...data.payments];
         if (isInstallmentPackage) {
@@ -690,7 +687,7 @@ const handlePrintCarne = async (studentId: string) => {
     let newPayments = [...data.payments];
 
     showAlert('Aguarde', `Excluindo ${ids.length} cobranças no Asaas...`, 'info');
-    
+
     for (const id of ids) {
       try {
         const response = await fetch('/api/excluir_cobranca', {
@@ -711,7 +708,7 @@ const handlePrintCarne = async (studentId: string) => {
     } else {
       showAlert('Erro', 'Falha ao excluir selecionados.', 'error');
     }
-    
+
     if (isCarneContext) {
       setCarneToDelete(null);
       setCarneSelectedPayments([]);
@@ -736,37 +733,37 @@ const handlePrintCarne = async (studentId: string) => {
 
   const getStatusBadge = (payment: Payment) => {
     const status = (payment.status || '').toLowerCase();
-    
+
     if (status === 'paid' || status === 'pago' || status === 'received' || status === 'confirmed') {
       const dueDate = new Date(payment.dueDate);
       const paidDate = payment.paidDate ? new Date(payment.paidDate) : null;
-      
+
       if (paidDate) {
         // Reset hours for comparison
-        dueDate.setHours(0,0,0,0);
-        paidDate.setHours(0,0,0,0);
-        
+        dueDate.setHours(0, 0, 0, 0);
+        paidDate.setHours(0, 0, 0, 0);
+
         if (paidDate <= dueDate) {
-          return <span className="inline-flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider"><CheckCircle size={12}/> Pagamento em Dia</span>;
+          return <span className="inline-flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider"><CheckCircle size={12} /> Pagamento em Dia</span>;
         } else {
-          return <span className="inline-flex items-center gap-1 text-emerald-900 bg-emerald-100 px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider"><CheckCircle size={12}/> Pago com Atraso</span>;
+          return <span className="inline-flex items-center gap-1 text-emerald-900 bg-emerald-100 px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider"><CheckCircle size={12} /> Pago com Atraso</span>;
         }
       }
-      return <span className="inline-flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider"><CheckCircle size={12}/> Pago</span>;
+      return <span className="inline-flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider"><CheckCircle size={12} /> Pago</span>;
     }
-    
+
     if (status === 'overdue' || status === 'atrasado') {
-      return <span className="inline-flex items-center gap-1 text-red-600 bg-red-50 px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider"><AlertCircle size={12}/> Atrasado</span>;
+      return <span className="inline-flex items-center gap-1 text-red-600 bg-red-50 px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider"><AlertCircle size={12} /> Atrasado</span>;
     }
-    
+
     if (status === 'pending' || status === 'pendente' || !status) {
-      return <span className="inline-flex items-center gap-1 text-amber-600 bg-amber-50 px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider"><Clock size={12}/> Pendente</span>;
+      return <span className="inline-flex items-center gap-1 text-amber-600 bg-amber-50 px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider"><Clock size={12} /> Pendente</span>;
     }
-    
+
     if (status === 'cancelled' || status === 'cancelado') {
-      return <span className="inline-flex items-center gap-1 text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider"><X size={12}/> Cancelado</span>;
+      return <span className="inline-flex items-center gap-1 text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider"><X size={12} /> Cancelado</span>;
     }
-    
+
     return null;
   };
 
@@ -780,9 +777,9 @@ const handlePrintCarne = async (studentId: string) => {
           <p className="text-slate-500 text-sm">Gestão de mensalidades vinculadas a contratos e cursos.</p>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          
+
           <div className="relative">
-            <button 
+            <button
               onClick={() => setShowPrintDropdown(!showPrintDropdown)}
               className="flex-1 sm:flex-none bg-white text-indigo-600 border border-indigo-200 px-6 py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-50 transition-all shadow-sm font-bold active:scale-95"
             >
@@ -796,7 +793,7 @@ const handlePrintCarne = async (studentId: string) => {
             )}
           </div>
 
-          <button 
+          <button
             onClick={() => setIsModalOpen(true)}
             className="flex-1 sm:flex-none bg-indigo-600 text-white px-6 py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all shadow-lg font-bold active:scale-95"
           >
@@ -813,15 +810,14 @@ const handlePrintCarne = async (studentId: string) => {
                 <Filter size={16} className="text-slate-400" />
                 <span className="text-[10px] font-bold text-slate-500 uppercase">Visão:</span>
               </div>
-              
+
               <div className="flex gap-1.5">
                 {(['all', 'avulsas', 'parcelamentos'] as const).map(type => (
                   <button
                     key={type}
                     onClick={() => setFilterType(type)}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-all ${
-                      filterType === type ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
-                    }`}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-all ${filterType === type ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
+                      }`}
                   >
                     {type === 'all' ? 'Todas as Cobranças' : type === 'avulsas' ? 'Avulsas' : 'Parcelamentos (Carnês)'}
                   </button>
@@ -834,15 +830,14 @@ const handlePrintCarne = async (studentId: string) => {
                 <Filter size={16} className="text-slate-400" />
                 <span className="text-[10px] font-bold text-slate-500 uppercase">Status:</span>
               </div>
-              
+
               <div className="flex gap-1.5">
                 {(['all', 'pending', 'paid', 'overdue'] as const).map(status => (
                   <button
                     key={status}
                     onClick={() => setFilterStatus(status)}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-all ${
-                      filterStatus === status ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
-                    }`}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-all ${filterStatus === status ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
+                      }`}
                   >
                     {status === 'all' ? 'Todos' : status === 'paid' ? 'Pagos' : status === 'pending' ? 'Pendentes' : 'Atrasados'}
                   </button>
@@ -854,7 +849,7 @@ const handlePrintCarne = async (studentId: string) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="relative">
               <BookOpen size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <select 
+              <select
                 className={`${inputClass} w-full pl-9`}
                 value={filterClass}
                 onChange={e => {
@@ -868,7 +863,7 @@ const handlePrintCarne = async (studentId: string) => {
             </div>
             <div className="relative">
               <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <select 
+              <select
                 className={`${inputClass} w-full pl-9`}
                 value={filterStudent}
                 onChange={e => setFilterStudent(e.target.value)}
@@ -884,7 +879,7 @@ const handlePrintCarne = async (studentId: string) => {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left table-auto">
-                        <thead className="bg-slate-50 text-slate-500 text-[10px] uppercase font-black tracking-[0.1em]">
+            <thead className="bg-slate-50 text-slate-500 text-[10px] uppercase font-black tracking-[0.1em]">
               <tr>
                 <th className="w-12 px-4 py-4 text-center">
                   {filterType !== 'parcelamentos' && (
@@ -908,12 +903,12 @@ const handlePrintCarne = async (studentId: string) => {
                 groupedInstallments.map(group => {
                   const student = data.students.find(s => s.id === group.studentId);
                   const isExpanded = expandedInstallments.includes(group.installmentId);
-                  
+
                   return (
                     <React.Fragment key={group.installmentId}>
                       <tr className="hover:bg-indigo-50/30 transition-colors group bg-slate-50/50">
                         <td className="px-6 py-5 whitespace-nowrap min-w-[250px]"><div className="font-bold text-slate-900 flex items-center gap-2 truncate max-w-[250px]">{student?.name || 'Aluno Removido'}
-                          </div>
+                        </div>
                           <div className="text-[10px] font-black text-indigo-500 uppercase tracking-wide mt-1 flex items-center gap-1">
                             <Layers size={12} />
                             Carnê de {group.payments.length}x
@@ -934,19 +929,19 @@ const handlePrintCarne = async (studentId: string) => {
                         </td>
                         <td className="px-6 py-5">
                           <span className="inline-flex items-center gap-1 text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider">
-                            <Layers size={12}/> {group.payments.length} Parcelas
+                            <Layers size={12} /> {group.payments.length} Parcelas
                           </span>
                         </td>
                         <td className="px-6 py-5 text-right flex justify-end gap-2">
-                          <button 
+                          <button
                             onClick={() => toggleInstallment(group.installmentId)}
                             className="px-3 py-1.5 bg-white text-slate-700 border border-slate-200 rounded-lg text-xs font-bold hover:bg-slate-50 transition-colors inline-flex items-center gap-1.5"
                           >
                             {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                             {isExpanded ? 'Ocultar' : 'Ver Parcelas'}
                           </button>
-                          <button 
-                            onClick={() => handleOpenPaymentLink(group.installmentId, 'carne')}
+                          <button
+                            onClick={() => executePrintCarne(group.installmentId, 'dueDate')}
                             className="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors inline-flex items-center gap-1.5 border border-indigo-100"
                           >
                             <Printer size={14} /> Imprimir Carnê
@@ -957,55 +952,65 @@ const handlePrintCarne = async (studentId: string) => {
                       {isExpanded && group.payments.map(payment => {
                         const payId = payment.asaasPaymentId || payment.id;
                         return (
-                        <tr key={payment.id} className="hover:bg-indigo-50/10 transition-colors bg-white border-t border-slate-50">
-                          <td className="w-12 px-4 py-4 text-center">
-                            <input
-                              type="checkbox"
-                              className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:opacity-40"
-                              disabled={payment.status === 'paid'}
-                              checked={selectedPayments.includes(payId)}
-                              onChange={e => setSelectedPayments(prev =>
-                                e.target.checked ? [...prev, payId] : prev.filter(x => x !== payId)
-                              )}
-                            />
-                          </td>
-                          <td className="px-4 py-4 pl-8">
-                            <div className="text-[10px] font-black text-slate-500 uppercase tracking-wide">
-                              Parcela {payment.installmentNumber}/{payment.totalInstallments}
-                            </div>
-                          </td>
-                          <td className="px-4 py-4 text-slate-600 text-sm">
-                            {new Date(payment.dueDate).toLocaleDateString('pt-BR')}
-                          </td>
-                          <td className="px-4 py-4">
-                            <div className="font-bold text-slate-700 text-sm">R$ {payment.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                          </td>
-                          <td className="px-4 py-4">{getStatusBadge(payment)}</td>
-                          <td className="px-4 py-4">
-                            <div className="flex justify-end gap-1 flex-wrap">
-                              {payment.asaasPaymentId && (
-                                <>
-                                  {(payment.status === 'pending' || payment.status === 'overdue') && (
-                                    <button onClick={() => handleOpenPaymentLink(payment.asaasPaymentId!, 'boleto')} className="px-2 py-1 bg-slate-100 text-slate-700 rounded text-[10px] font-bold hover:bg-slate-200 inline-flex items-center gap-1">
-                                      <Barcode size={11} /> Boleto
-                                    </button>
-                                  )}
-                                  {(payment.status === 'paid' || payment.status === 'received' || payment.status === 'confirmed') && (
-                                    <button onClick={() => handleOpenPaymentLink(payment.asaasPaymentId!, 'recibo')} className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded text-[10px] font-bold hover:bg-emerald-100 inline-flex items-center gap-1">
-                                      <Receipt size={11} /> Recibo
-                                    </button>
-                                  )}
-                                </>
-                              )}
-                              <button onClick={() => { setPaymentToEdit(payment); setEditValue(payment.amount.toString()); setEditDate(payment.dueDate); }} className="p-1 text-slate-400 hover:text-indigo-600" title="Editar">
-                                <Pencil size={13} />
-                              </button>
-                              <button onClick={() => openDelete(payment)} className="p-1 text-slate-400 hover:text-red-600" title="Excluir">
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                          <tr key={payment.id} className="hover:bg-indigo-50/10 transition-colors bg-white border-t border-slate-50">
+                            <td className="w-12 px-4 py-4 text-center">
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:opacity-40"
+                                disabled={payment.status === 'paid'}
+                                checked={selectedPayments.includes(payId)}
+                                onChange={e => setSelectedPayments(prev =>
+                                  e.target.checked ? [...prev, payId] : prev.filter(x => x !== payId)
+                                )}
+                              />
+                            </td>
+                            <td className="px-4 py-4 pl-8">
+                              <div className="text-[10px] font-black text-slate-500 uppercase tracking-wide">
+                                Parcela {payment.installmentNumber}/{payment.totalInstallments}
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 text-slate-600 text-sm">
+                              {new Date(payment.dueDate).toLocaleDateString('pt-BR')}
+                            </td>
+                            <td className="px-4 py-4">
+                              <div className="font-bold text-slate-700 text-sm">R$ {payment.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                            </td>
+                            <td className="px-4 py-4">{getStatusBadge(payment)}</td>
+                            <td className="px-4 py-4">
+                              <div className="flex justify-end gap-1 flex-wrap">
+                                {payment.asaasPaymentId && (
+                                  <>
+                                    {(payment.status === 'pending' || payment.status === 'overdue') && (
+                                      <button onClick={() => handleOpenPaymentLink(payment.asaasPaymentId!, 'boleto')} className="px-2 py-1 bg-slate-100 text-slate-700 rounded text-[10px] font-bold hover:bg-slate-200 inline-flex items-center gap-1">
+                                        <Barcode size={11} /> Boleto
+                                      </button>
+                                    )}
+                                    {(payment.status === 'paid' || payment.status === 'received' || payment.status === 'confirmed') && (
+                                      <button onClick={() => handleOpenPaymentLink(payment.asaasPaymentId!, 'recibo')} className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded text-[10px] font-bold hover:bg-emerald-100 inline-flex items-center gap-1">
+                                        <Receipt size={11} /> Recibo
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+                                {(payment.installmentId || payment.asaasInstallmentId || group.installmentId) && (
+                                  <button
+                                    onClick={() => executePrintCarne(payment.installmentId || payment.asaasInstallmentId || group.installmentId, 'dueDate')}
+                                    className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-[10px] font-bold hover:bg-indigo-100 inline-flex items-center gap-1"
+                                    title="Imprimir Carnê Completo"
+                                  >
+                                    <Printer size={11} /> Carnê
+                                  </button>
+                                )}
+                                <button onClick={() => { setPaymentToEdit(payment); setEditValue(payment.amount.toString()); setEditDate(payment.dueDate); }} className="p-1 text-slate-400 hover:text-indigo-600" title="Editar">
+                                  <Pencil size={13} />
+                                </button>
+                                <button onClick={() => openDelete(payment)} className="p-1 text-slate-400 hover:text-red-600" title="Excluir">
+
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
                         );
                       })}
                     </React.Fragment>
@@ -1029,14 +1034,14 @@ const handlePrintCarne = async (studentId: string) => {
                         />
                       </td>
                       <td className="px-4 py-5">
-                        <div className="font-bold text-slate-900 flex items-center gap-1 overflow-hidden" style={{maxWidth:'240px'}}>
+                        <div className="font-bold text-slate-900 flex items-center gap-1 overflow-hidden" style={{ maxWidth: '240px' }}>
                           <span className="truncate">{student?.name || 'Aluno Removido'}</span>
                           <button onClick={() => student && openHistory(student.id)} className="text-slate-400 hover:text-indigo-600 transition-colors shrink-0" title="Ver Histórico"><Eye size={13} /></button>
                         </div>
                         <div className="text-[10px] font-black text-indigo-500 uppercase tracking-wide mt-0.5">
                           {payment.type === 'registration' ? 'Matrícula' : 'Mensalidade'}{payment.installmentNumber && <span> {payment.installmentNumber}/{payment.totalInstallments}</span>}
                         </div>
-                        {payment.description && <div className="text-[10px] text-slate-400 mt-0.5 truncate" style={{maxWidth:'230px'}}>{payment.description}</div>}
+                        {payment.description && <div className="text-[10px] text-slate-400 mt-0.5 truncate" style={{ maxWidth: '230px' }}>{payment.description}</div>}
                       </td>
                       <td className="px-4 py-5 text-slate-600 text-sm">{new Date(payment.dueDate).toLocaleDateString('pt-BR')}</td>
                       <td className="px-4 py-5">
@@ -1050,6 +1055,15 @@ const handlePrintCarne = async (studentId: string) => {
                             {(payment.status === 'pending' || payment.status === 'overdue') && (<button onClick={() => handleOpenPaymentLink(payment.asaasPaymentId!, 'boleto')} className="px-2.5 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors inline-flex items-center gap-1"><Barcode size={13} /> Boleto</button>)}
                             {(payment.status === 'paid' || payment.status === 'received' || payment.status === 'confirmed') && (<button onClick={() => handleOpenPaymentLink(payment.asaasPaymentId!, 'recibo')} className="px-2.5 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors inline-flex items-center gap-1 border border-emerald-100"><Receipt size={13} /> Recibo</button>)}
                           </>)}
+                          {(payment.installmentId || payment.asaasInstallmentId) && (
+                            <button
+                              onClick={() => executePrintCarne(payment.installmentId || payment.asaasInstallmentId, 'dueDate')}
+                              className="px-2.5 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors inline-flex items-center gap-1 border border-indigo-100"
+                              title="Imprimir Carnê Completo"
+                            >
+                              <Printer size={13} /> Carnê
+                            </button>
+                          )}
                           <button onClick={() => { setPaymentToEdit(payment); setEditValue(payment.amount.toString()); setEditDate(payment.dueDate); }} className="p-1.5 text-slate-400 hover:text-indigo-600 transition-all" title="Editar"><Pencil size={14} /></button>
                           <button onClick={() => openDelete(payment)} className="p-1.5 text-slate-400 hover:text-red-600 transition-all" title="Excluir"><Trash2 size={14} /></button>
                         </div>
@@ -1076,7 +1090,7 @@ const handlePrintCarne = async (studentId: string) => {
           <div className={`bg-white rounded-xl w-full max-w-lg shadow-2xl my-auto transition-all duration-400 relative overflow-hidden ${isClosing ? 'animate-slide-down-fade-out' : 'animate-slide-up'}`}>
             {/* Blue Top Bar */}
             <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
-            
+
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-indigo-50/30">
               <div>
                 <h3 className="text-xl font-black text-slate-800 tracking-tight">Novo Lançamento</h3>
@@ -1095,7 +1109,7 @@ const handlePrintCarne = async (studentId: string) => {
                   subtext: data.classes.find(c => c.id === s.classId)?.name || 'Sem Turma'
                 }))}
                 value={formData.studentId}
-                onChange={val => setFormData({...formData, studentId: val})}
+                onChange={val => setFormData({ ...formData, studentId: val })}
               />
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Referente a (Opcional)</label>
@@ -1113,57 +1127,57 @@ const handlePrintCarne = async (studentId: string) => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Tipo</label>
-                  <select className={inputClass + " w-full"} value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
+                  <select className={inputClass + " w-full"} value={formData.type} onChange={e => setFormData({ ...formData, type: e.target.value as any })}>
                     <option value="monthly">Mensalidade</option>
                     <option value="registration">Matrícula</option>
                     <option value="other">Outros</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1 flex items-center gap-1"><Hash size={12}/> Qtd. Parcelas</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1 flex items-center gap-1"><Hash size={12} /> Qtd. Parcelas</label>
                   <input type="number" min="1" max="100" required className={inputClass + " w-full"} value={manualInstallments} onChange={e => setManualInstallments(parseInt(e.target.value) || 1)} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Valor Base (R$)</label>
-                  <input type="number" step="0.01" required className={inputClass + " w-full"} value={formData.amount} onChange={e => setFormData({...formData, amount: parseFloat(e.target.value)})} />
+                  <input type="number" step="0.01" required className={inputClass + " w-full"} value={formData.amount} onChange={e => setFormData({ ...formData, amount: parseFloat(e.target.value) })} />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1 flex items-center gap-1"><Tag size={12}/> Desconto (R$)</label>
-                  <input type="number" step="0.01" className={inputClass + " w-full"} value={formData.discount} onChange={e => setFormData({...formData, discount: parseFloat(e.target.value)})} />
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1 flex items-center gap-1"><Tag size={12} /> Desconto (R$)</label>
+                  <input type="number" step="0.01" className={inputClass + " w-full"} value={formData.discount} onChange={e => setFormData({ ...formData, discount: parseFloat(e.target.value) })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Multa (%)</label>
-                  <input type="number" step="0.01" className={inputClass + " w-full"} value={formData.fine} onChange={e => setFormData({...formData, fine: parseFloat(e.target.value) || 0})} />
+                  <input type="number" step="0.01" className={inputClass + " w-full"} value={formData.fine} onChange={e => setFormData({ ...formData, fine: parseFloat(e.target.value) || 0 })} />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Juros ao Mês (%)</label>
-                  <input type="number" step="0.01" className={inputClass + " w-full"} value={formData.interest} onChange={e => setFormData({...formData, interest: parseFloat(e.target.value) || 0})} />
+                  <input type="number" step="0.01" className={inputClass + " w-full"} value={formData.interest} onChange={e => setFormData({ ...formData, interest: parseFloat(e.target.value) || 0 })} />
                 </div>
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Data Vencimento Inicial</label>
-                <input 
-                  required 
-                  placeholder="DD/MM/AAAA" 
-                  className={inputClass + " w-full"} 
-                  value={dueDateDisplay} 
+                <input
+                  required
+                  placeholder="DD/MM/AAAA"
+                  className={inputClass + " w-full"}
+                  value={dueDateDisplay}
                   onChange={e => {
                     const masked = formatDateMask(e.target.value);
                     setDueDateDisplay(masked);
                     if (masked.length === 10) {
-                      setFormData(prev => ({...prev, dueDate: dateBrToIso(masked)}));
+                      setFormData(prev => ({ ...prev, dueDate: dateBrToIso(masked) }));
                     }
-                  }} 
+                  }}
                   maxLength={10}
                 />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Descrição</label>
-                <input placeholder="Ex: Referente a Janeiro/2024" className={inputClass + " w-full"} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                <input placeholder="Ex: Referente a Janeiro/2024" className={inputClass + " w-full"} value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
               </div>
               <div className="pt-4 flex gap-4">
                 <button type="button" onClick={closeModal} className="flex-1 px-4 py-3 border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition-colors font-bold text-xs">Cancelar</button>
@@ -1180,16 +1194,16 @@ const handlePrintCarne = async (studentId: string) => {
           <div className={`bg-white rounded-xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh] my-auto transition-all duration-400 relative overflow-hidden ${isClosing ? 'animate-slide-down-fade-out' : 'animate-slide-up'}`}>
             {/* Blue Top Bar */}
             <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
-            
+
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <div>
                 <h3 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-                  <User size={20} className="text-indigo-600"/> {selectedStudentHistory.name}
+                  <User size={20} className="text-indigo-600" /> {selectedStudentHistory.name}
                 </h3>
                 <p className="text-xs text-slate-500">Histórico completo de pagamentos.</p>
               </div>
               <div className="flex items-center gap-2">
-                <button 
+                <button
                   onClick={() => handlePrintCarne(selectedStudentHistory.id)}
                   disabled={isFetchingCarne}
                   className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-all flex items-center gap-2 border border-indigo-100 disabled:opacity-50"
@@ -1212,7 +1226,7 @@ const handlePrintCarne = async (studentId: string) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs">
-                  {data.payments.filter(p => p.studentId === selectedStudentHistory.id).sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()).map(p => (
+                  {data.payments.filter(p => p.studentId === selectedStudentHistory.id).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()).map(p => (
                     <tr key={p.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3">
                         <div className="font-bold text-slate-700">{p.description || (p.type === 'monthly' ? 'Mensalidade' : 'Taxa')}</div>
@@ -1225,7 +1239,7 @@ const handlePrintCarne = async (studentId: string) => {
                         {p.asaasPaymentId && (
                           <>
                             {(p.status === 'pending' || p.status === 'overdue') && (
-                              <button 
+                              <button
                                 onClick={() => handleOpenPaymentLink(p.asaasPaymentId!, 'boleto')}
                                 className="px-2 py-1 bg-slate-100 text-slate-700 rounded text-[9px] font-bold hover:bg-slate-200 transition-colors inline-flex items-center gap-1"
                               >
@@ -1233,7 +1247,7 @@ const handlePrintCarne = async (studentId: string) => {
                               </button>
                             )}
                             {(p.status === 'paid' || p.status === 'received' || p.status === 'confirmed') && (
-                              <button 
+                              <button
                                 onClick={() => handleOpenPaymentLink(p.asaasPaymentId!, 'recibo')}
                                 className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded text-[9px] font-bold hover:bg-emerald-100 transition-colors inline-flex items-center gap-1 border border-emerald-100"
                               >
@@ -1242,7 +1256,7 @@ const handlePrintCarne = async (studentId: string) => {
                             )}
                           </>
                         )}
-                        <button onClick={() => { closeModal(); openDelete(p); }} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={14}/></button>
+                        <button onClick={() => { closeModal(); openDelete(p); }} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={14} /></button>
                       </td>
                     </tr>
                   ))}
@@ -1262,14 +1276,14 @@ const handlePrintCarne = async (studentId: string) => {
           <div className={`bg-white rounded-xl w-full max-w-sm shadow-2xl my-auto transition-all duration-400 relative overflow-hidden ${isClosing ? 'animate-slide-down-fade-out' : 'animate-slide-up'}`}>
             {/* Blue Top Bar */}
             <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
-            
+
             <div className="p-6 text-center">
               <div className="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Trash2 size={24} />
               </div>
               <h3 className="text-lg font-black text-slate-800 mb-2">Excluir Pagamento</h3>
               <p className="text-sm text-slate-500 mb-6">Como deseja excluir este lançamento?</p>
-              
+
               <div className="flex flex-col gap-2">
                 {paymentToDelete.id && typeof paymentToDelete.id === 'string' && (paymentToDelete.id.startsWith('inst_') || paymentToDelete.id.startsWith('ins_')) ? (
                   <button onClick={() => handleDelete('all')} className="w-full py-3 bg-red-600 text-white rounded-xl font-bold text-sm hover:bg-red-700 transition-all">
@@ -1301,7 +1315,7 @@ const handlePrintCarne = async (studentId: string) => {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in">
           <div className="bg-white rounded-xl w-full max-w-3xl shadow-2xl my-auto relative overflow-hidden animate-slide-up">
             <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
-            
+
             <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-indigo-50/30">
               <div>
                 <h3 className="text-2xl font-black text-slate-800 tracking-tight">Carnê Digital</h3>
@@ -1309,7 +1323,7 @@ const handlePrintCarne = async (studentId: string) => {
               </div>
               <button onClick={() => setShowFallbackModal(false)} className="p-2 bg-white text-slate-400 hover:text-red-500 rounded-lg shadow-sm transition-all hover:rotate-90"><X size={24} /></button>
             </div>
-            
+
             <div className="p-8 space-y-4 max-h-[60vh] overflow-y-auto">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {fallbackInstallments.map((parcela) => (
@@ -1324,21 +1338,20 @@ const handlePrintCarne = async (studentId: string) => {
                         <div className="text-sm font-bold text-slate-700">{new Date(parcela.vencimento).toLocaleDateString('pt-BR')}</div>
                       </div>
                     </div>
-                    
+
                     <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${
-                        parcela.status === 'paid' || parcela.status === 'received' || parcela.status === 'confirmed' ? 'text-emerald-600 bg-emerald-50' :
-                        parcela.status === 'overdue' ? 'text-red-600 bg-red-50' :
-                        'text-amber-600 bg-amber-50'
-                      }`}>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${parcela.status === 'paid' || parcela.status === 'received' || parcela.status === 'confirmed' ? 'text-emerald-600 bg-emerald-50' :
+                          parcela.status === 'overdue' ? 'text-red-600 bg-red-50' :
+                            'text-amber-600 bg-amber-50'
+                        }`}>
                         {parcela.status === 'paid' || parcela.status === 'received' || parcela.status === 'confirmed' ? 'Pago' :
-                         parcela.status === 'overdue' ? 'Atrasado' : 'Pendente'}
+                          parcela.status === 'overdue' ? 'Atrasado' : 'Pendente'}
                       </span>
-                      
+
                       {parcela.linkBoleto ? (
-                        <a 
-                          href={parcela.linkBoleto} 
-                          target="_blank" 
+                        <a
+                          href={parcela.linkBoleto}
+                          target="_blank"
                           rel="noopener noreferrer"
                           className="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors inline-flex items-center gap-1.5"
                         >
@@ -1352,11 +1365,11 @@ const handlePrintCarne = async (studentId: string) => {
                 ))}
               </div>
             </div>
-            
+
             <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
-              <button 
-                type="button" 
-                onClick={() => setShowFallbackModal(false)} 
+              <button
+                type="button"
+                onClick={() => setShowFallbackModal(false)}
                 className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-colors shadow-sm"
               >
                 Fechar
@@ -1367,83 +1380,83 @@ const handlePrintCarne = async (studentId: string) => {
       )}
 
       {/* PRINT CARNE MODAL */}
-      
-{carneToDelete && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-    <div className="bg-white rounded-3xl w-full max-w-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
-      <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 relative overflow-hidden">
-        <div className="relative z-10 flex items-center gap-4">
-          <div className="w-12 h-12 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center shadow-inner">
-            <Trash2 size={24} />
-          </div>
-          <div>
-            <h3 className="text-xl font-black text-slate-800 tracking-tight">Exclusão de Carnê</h3>
-            <p className="text-slate-500 text-sm font-medium mt-1">Selecione as parcelas pendentes para exclusão</p>
-          </div>
-        </div>
-      </div>
-      <div className="p-8 overflow-y-auto">
-        <div className="space-y-3">
-          {carneToDelete.payments.map(p => (
-            <label key={p.id} className={`flex items-center gap-4 p-4 rounded-xl border ${p.status === 'paid' ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 cursor-pointer hover:border-indigo-300'}`}>
-              <input type="checkbox" disabled={p.status === 'paid'} checked={carneSelectedPayments.includes(p.asaasPaymentId || p.id)} onChange={e => {
-                if (e.target.checked) setCarneSelectedPayments(prev => [...prev, p.asaasPaymentId || p.id]);
-                else setCarneSelectedPayments(prev => prev.filter(id => id !== (p.asaasPaymentId || p.id)));
-              }} className="rounded text-indigo-600 w-5 h-5 focus:ring-indigo-500 disabled:opacity-50" />
-              <div className="flex-1 flex justify-between items-center">
-                <div>
-                  <span className="font-bold text-slate-700">Parcela {p.installmentNumber}</span>
-                  <span className="text-sm font-medium text-slate-500 ml-3">Venc: {new Date(p.dueDate).toLocaleDateString()}</span>
+
+      {carneToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 relative overflow-hidden">
+              <div className="relative z-10 flex items-center gap-4">
+                <div className="w-12 h-12 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center shadow-inner">
+                  <Trash2 size={24} />
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-black text-slate-800">R$ {p.amount.toFixed(2)}</span>
-                  <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${p.status === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                    {p.status === 'paid' ? 'PAGO' : 'PENDENTE'}
-                  </span>
+                <div>
+                  <h3 className="text-xl font-black text-slate-800 tracking-tight">Exclusão de Carnê</h3>
+                  <p className="text-slate-500 text-sm font-medium mt-1">Selecione as parcelas pendentes para exclusão</p>
                 </div>
               </div>
-            </label>
-          ))}
+            </div>
+            <div className="p-8 overflow-y-auto">
+              <div className="space-y-3">
+                {carneToDelete.payments.map(p => (
+                  <label key={p.id} className={`flex items-center gap-4 p-4 rounded-xl border ${p.status === 'paid' ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 cursor-pointer hover:border-indigo-300'}`}>
+                    <input type="checkbox" disabled={p.status === 'paid'} checked={carneSelectedPayments.includes(p.asaasPaymentId || p.id)} onChange={e => {
+                      if (e.target.checked) setCarneSelectedPayments(prev => [...prev, p.asaasPaymentId || p.id]);
+                      else setCarneSelectedPayments(prev => prev.filter(id => id !== (p.asaasPaymentId || p.id)));
+                    }} className="rounded text-indigo-600 w-5 h-5 focus:ring-indigo-500 disabled:opacity-50" />
+                    <div className="flex-1 flex justify-between items-center">
+                      <div>
+                        <span className="font-bold text-slate-700">Parcela {p.installmentNumber}</span>
+                        <span className="text-sm font-medium text-slate-500 ml-3">Venc: {new Date(p.dueDate).toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-black text-slate-800">R$ {p.amount.toFixed(2)}</span>
+                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${p.status === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {p.status === 'paid' ? 'PAGO' : 'PENDENTE'}
+                        </span>
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="px-8 py-6 bg-slate-50 flex justify-end gap-3 border-t border-slate-100">
+              <button onClick={() => setCarneToDelete(null)} disabled={isDeleting} className="px-6 py-3 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50">Cancelar</button>
+              <button onClick={() => handleBulkDelete(carneSelectedPayments, true)} disabled={isDeleting || carneSelectedPayments.length === 0} className="px-6 py-3 text-sm font-bold text-white bg-red-600 rounded-xl hover:bg-red-700 flex items-center gap-2 shadow-lg shadow-red-600/20 disabled:opacity-50">
+                <Trash2 size={16} /> Excluir {carneSelectedPayments.length} Avaliados
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
-      <div className="px-8 py-6 bg-slate-50 flex justify-end gap-3 border-t border-slate-100">
-        <button onClick={() => setCarneToDelete(null)} disabled={isDeleting} className="px-6 py-3 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50">Cancelar</button>
-        <button onClick={() => handleBulkDelete(carneSelectedPayments, true)} disabled={isDeleting || carneSelectedPayments.length === 0} className="px-6 py-3 text-sm font-bold text-white bg-red-600 rounded-xl hover:bg-red-700 flex items-center gap-2 shadow-lg shadow-red-600/20 disabled:opacity-50">
-          <Trash2 size={16} /> Excluir {carneSelectedPayments.length} Avaliados
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+      )}
 
-{paymentToEdit && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-    <form onSubmit={handleEditSave} className="bg-white rounded-3xl w-full max-w-md shadow-xl overflow-hidden flex flex-col relative">
-      <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
-        <h3 className="text-xl font-black text-slate-800 tracking-tight">Editar Cobrança</h3>
-      </div>
-      <div className="p-8 space-y-4">
-        <div>
-          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Valor (R$)</label>
-          <input type="number" step="0.01" min="1" required className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-3 font-medium outline-none focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-400/20" value={editValue} onChange={e => setEditValue(e.target.value)} />
+      {paymentToEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <form onSubmit={handleEditSave} className="bg-white rounded-3xl w-full max-w-md shadow-xl overflow-hidden flex flex-col relative">
+            <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
+              <h3 className="text-xl font-black text-slate-800 tracking-tight">Editar Cobrança</h3>
+            </div>
+            <div className="p-8 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Valor (R$)</label>
+                <input type="number" step="0.01" min="1" required className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-3 font-medium outline-none focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-400/20" value={editValue} onChange={e => setEditValue(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Vencimento</label>
+                <input type="date" required className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-3 font-medium outline-none focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-400/20" value={editDate} onChange={e => setEditDate(e.target.value)} />
+              </div>
+            </div>
+            <div className="px-8 py-6 bg-slate-50 flex justify-end gap-3 border-t border-slate-100">
+              <button type="button" onClick={() => setPaymentToEdit(null)} disabled={isEditing} className="px-6 py-3 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50">Cancelar</button>
+              <button type="submit" disabled={isEditing} className="px-6 py-3 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 disabled:opacity-50">Salvar Alterações</button>
+            </div>
+          </form>
         </div>
-        <div>
-          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Vencimento</label>
-          <input type="date" required className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-3 font-medium outline-none focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-400/20" value={editDate} onChange={e => setEditDate(e.target.value)} />
-        </div>
-      </div>
-      <div className="px-8 py-6 bg-slate-50 flex justify-end gap-3 border-t border-slate-100">
-        <button type="button" onClick={() => setPaymentToEdit(null)} disabled={isEditing} className="px-6 py-3 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50">Cancelar</button>
-        <button type="submit" disabled={isEditing} className="px-6 py-3 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 disabled:opacity-50">Salvar Alterações</button>
-      </div>
-    </form>
-  </div>
-)}
-{showPrintCarneModal && (
+      )}
+      {showPrintCarneModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in">
           <div className="bg-white rounded-xl w-full max-w-2xl shadow-2xl my-auto relative overflow-hidden animate-slide-up">
             <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
-            
+
             <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-indigo-50/30">
               <div>
                 <h3 className="text-2xl font-black text-slate-800 tracking-tight">Imprimir Carnê</h3>
@@ -1451,7 +1464,7 @@ const handlePrintCarne = async (studentId: string) => {
               </div>
               <button onClick={() => setShowPrintCarneModal(false)} className="p-2 bg-white text-slate-400 hover:text-red-500 rounded-lg shadow-sm transition-all hover:rotate-90"><X size={24} /></button>
             </div>
-            
+
             <div className="p-8 space-y-8">
               <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
                 <SearchableSelect
@@ -1466,23 +1479,23 @@ const handlePrintCarne = async (studentId: string) => {
                   onChange={setSelectedStudentForCarne}
                 />
               </div>
-              
+
               <div className="flex justify-end gap-4 pt-4 border-t border-slate-100">
-                <button 
-                  type="button" 
-                  onClick={() => setShowPrintCarneModal(false)} 
+                <button
+                  type="button"
+                  onClick={() => setShowPrintCarneModal(false)}
                   className="px-6 py-3 text-slate-600 font-bold hover:bg-slate-100 rounded-xl transition-colors"
                 >
                   Cancelar
                 </button>
-                <button 
+                <button
                   type="button"
                   onClick={() => {
-                      if (selectedStudentForCarne) {
-                        checkInstallmentsForStudent(selectedStudentForCarne, printSortTarget);
-                        setShowPrintCarneModal(false);
-                        setSelectedStudentForCarne('');
-                      } else {
+                    if (selectedStudentForCarne) {
+                      checkInstallmentsForStudent(selectedStudentForCarne, printSortTarget);
+                      setShowPrintCarneModal(false);
+                      setSelectedStudentForCarne('');
+                    } else {
                       showAlert('Atenção', 'Selecione um aluno primeiro.', 'warning');
                     }
                   }}

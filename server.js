@@ -457,19 +457,60 @@ app.get('/api/parcelamentos/:id/carne', async (req, res) => {
     if (instId) {
       const asaasTargetInstId = formatInstallmentId(instId);
       console.log(`[Carnê] Buscando PDF do parcelamento ${asaasTargetInstId} no Asaas...`);
-      const ar = await fetch(`https://sandbox.asaas.com/api/v3/installments/${asaasTargetInstId}`, { headers: { 'access_token': process.env.ASAAS_API_KEY } });
-      if (ar.ok) {
-        const data = await ar.json();
-        console.log(`[Carnê] PDF Encontrado:`, data.paymentBookUrl);
-        if (data.paymentBookUrl) return res.status(200).json({ status: 'success', type: 'pdf', url: data.paymentBookUrl });
+      const baseUrl = process.env.ASAAS_API_URL || 'https://sandbox.asaas.com/api';
+      
+      // 1. Verificar se o carnê já foi gerado e salvo no Supabase (se a coluna link_carne existir)
+      const pSaved = parcelas?.find(x => x.link_carne);
+      if (pSaved?.link_carne) {
+        console.log(`[Carnê] Retornando PDF em cache: ${pSaved.link_carne}`);
+        return res.status(200).json({ status: 'success', type: 'pdf', url: pSaved.link_carne });
+      }
+
+      // 2. Fazer GET no Asaas solicitando o paymentBook diretamente
+      const ar = await fetch(`${baseUrl}/v3/installments/${asaasTargetInstId}/paymentBook`, { 
+        headers: { 'access_token': process.env.ASAAS_API_KEY, 'Accept': 'application/pdf' } 
+      });
+      
+      if (ar.ok && ar.headers.get('content-type')?.includes('pdf')) {
+        console.log(`[Carnê] PDF capturado com sucesso do Asaas em formato binário.`);
+        
+        // 3. Lê o buffer do arquivo
+        const arrayBuffer = await ar.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const fileName = `carne_${asaasTargetInstId}.pdf`;
+
+        // 4. Upload para o Supabase Storage (bucket 'carnes')
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('carnes')
+          .upload(fileName, buffer, { 
+            contentType: 'application/pdf', 
+            upsert: true 
+          });
+
+        if (uploadError) {
+          console.error(`[Carnê] Falha no upload para o Supabase Storage:`, uploadError);
+          // Se falhar o upload, retorna fallback mas loga o erro
+        } else {
+          // 5. Gera a Public URL
+          const { data: publicUrlData } = supabase.storage.from('carnes').getPublicUrl(fileName);
+          const publicUrl = publicUrlData.publicUrl;
+          console.log(`[Carnê] Arquivo hospedado publicamente em:`, publicUrl);
+
+          // 6. Tenta salvar no Banco de Dados em 'link_carne'
+          const { error: dbUpdateErr } = await supabase.from('alunos_cobrancas').update({ link_carne: publicUrl }).eq('asaas_installment_id', instId);
+          if (dbUpdateErr) console.warn('[Carnê] Atenção: A coluna link_carne ainda não existe ou houve erro:', dbUpdateErr.message);
+
+          return res.status(200).json({ status: 'success', type: 'pdf', url: publicUrl });
+        }
       } else {
         const errData = await ar.json().catch(()=>({}));
-        console.error(`[Carnê] Asaas falhou ao buscar installament ${instId}:`, errData);
+        console.error(`[Carnê] Asaas falhou ao buscar o arquivo binário do installment ${asaasTargetInstId}:`, errData);
       }
     }
     
+    // Fallback se não der certo via PDF único: envia lista de boletos avulsos
     const boletos = parcelas ? parcelas.map((c, i) => ({ id: c.id, numero: i + 1, vencimento: c.vencimento, valor: c.valor, linkBoleto: c.link_boleto, status: c.status, asaasPaymentId: c.asaas_payment_id })) : [];
-    return res.status(200).json({ status: 'success', type: 'fallback', boletos, message: 'PDF unificado não disponível. Acesse os boletos individuais.' });
+    return res.status(200).json({ status: 'success', type: 'fallback', boletos, message: 'PDF unificado não disponível. Listando boletos.' });
   } catch (error) {
     addLog('Server', 'Carnê Erro', error.message);
     return res.status(500).json({ error: 'Erro interno.' });
@@ -559,37 +600,84 @@ app.get('/api/imprimir-carne/:installmentId', async (req, res) => {
   try {
     const { installmentId } = req.params;
     const { sort, order } = req.query;
+
+    // 1. Resolve qual é o Asaas Installment real (evita erro quando Front manda UUID local do Payment)
+    let queryParts = [`installment.eq.${installmentId}`, `asaas_installment_id.eq.${installmentId}`];
+    if (isUUID(installmentId)) queryParts.push(`id.eq.${installmentId}`);
+    const query = queryParts.join(',');
+
+    const { data: parcelas } = await supabase.from('alunos_cobrancas').select('*').or(query);
+    let instId = (!installmentId.startsWith('pay_')) ? installmentId : null;
     
-    // Extrai o UUID puro, removendo "ins_" ou "inst_" se houver
-    const cleanId = installmentId.replace(/^(ins_|inst_)/, '');
+    if (!instId && parcelas?.length > 0) {
+      const p = parcelas.find(x => x.asaas_installment_id);
+      if (p) instId = p.asaas_installment_id;
+    }
     
-    let asaasUrl = `${process.env.ASAAS_API_URL}/v3/installments/${cleanId}/paymentBook`;
+    // Fallback: se não achar nada, tenta a sorte com o cleanId puro
+    const asaasTargetInstId = formatInstallmentId(instId || installmentId);
+    console.log(`[Carnê] Buscando PDF do parcelamento ${asaasTargetInstId} no Asaas...`);
+
+    // 2. Verifica se o Carnê já foi salvo no Supabase alguma vez (Cache)
+    const pSaved = parcelas?.find(x => x.link_carne);
+    if (pSaved?.link_carne) {
+      console.log(`[Carnê] Retornando PDF Público do Cache (Supabase Storage): ${pSaved.link_carne}`);
+      // Redireciona direto pro Supabase para performance
+      return res.redirect(pSaved.link_carne);
+    }
+
+    // 3. Fazer GET no Asaas solicitando o paymentBook diretamente via Stream/ArrayBuffer
+    const baseUrl = process.env.ASAAS_API_URL || 'https://sandbox.asaas.com/api';
+    let asaasUrl = `${baseUrl}/v3/installments/${asaasTargetInstId}/paymentBook`;
+    
     const asaasParams = new URLSearchParams();
     if (sort) asaasParams.append('sort', sort);
     if (order) asaasParams.append('order', order);
-    
-    if (asaasParams.toString()) {
-      asaasUrl += `?${asaasParams.toString()}`;
-    }
+    if (asaasParams.toString()) asaasUrl += `?${asaasParams.toString()}`;
 
     const response = await fetch(asaasUrl, {
       method: 'GET',
       headers: {
-        'Accept': 'application/json',
-        'access_token': process.env.ASAAS_API_KEY
+        'access_token': process.env.ASAAS_API_KEY,
+        'Accept': 'application/pdf'
       }
     });
 
-    const result = await response.json();
-    
-    if (response.ok) {
-      res.json(result);
+    if (response.ok && response.headers.get('content-type')?.includes('pdf')) {
+      console.log(`[Carnê] Arquivo binário recebido do Asaas. Iniciando upload para o Supabase...`);
+      
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const fileName = `carne_${asaasTargetInstId}.pdf`;
+
+      // Subindo assíncrono para o Storage Supabase
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('carnes')
+        .upload(fileName, buffer, { contentType: 'application/pdf', upsert: true });
+
+      if (!uploadError) {
+        const { data: publicUrlData } = supabase.storage.from('carnes').getPublicUrl(fileName);
+        const publicUrl = publicUrlData.publicUrl;
+        console.log(`[Carnê] Link Público Supabase gerado:`, publicUrl);
+
+        // Atualiza a tabela (não bloqueia a response)
+        supabase.from('alunos_cobrancas').update({ link_carne: publicUrl }).eq('asaas_installment_id', instId).then(({ error }) => {
+          if (error) console.warn('[Carnê] Atenção: Erro ao injetar link_carne no BD:', error.message);
+        });
+      }
+
+      // Exibindo imediato na aba do cliente
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline; filename="carne.pdf"');
+      return res.send(buffer);
     } else {
-      res.status(response.status).json(result);
+      const errorText = await response.text();
+      console.error(`[Carnê] Falha no Asaas:`, errorText);
+      return res.status(response.status).send('Falha ao obter o Carnê no Asaas: ' + errorText);
     }
   } catch (error) {
-    console.error('Erro ao gerar carnê impresso:', error);
-    res.status(500).json({ error: 'Erro interno ao comunicar com Asaas.' });
+    console.error('Erro geral ao processar PDF do carnê:', error);
+    return res.status(500).json({ error: 'Erro interno na hospedagem de PDF.' });
   }
 });
 app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Servidor na porta ${PORT}`));
