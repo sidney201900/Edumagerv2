@@ -541,7 +541,8 @@ app.put('/api/cobrancas/:id', async (req, res) => {
       if (data && data.asaas_payment_id) targetAsaasId = data.asaas_payment_id;
     }
 
-    const aResp = await fetch(`https://sandbox.asaas.com/api/v3/payments/${targetAsaasId}`, {
+    const baseUrl = process.env.ASAAS_API_URL || 'https://sandbox.asaas.com/api';
+    const aResp = await fetch(`${baseUrl}/v3/payments/${targetAsaasId}`, {
       method: 'POST', 
       headers: { 'Content-Type': 'application/json', 'access_token': process.env.ASAAS_API_KEY },
       body: JSON.stringify({ value: valor, dueDate: vencimento })

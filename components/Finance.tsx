@@ -1452,6 +1452,36 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
           </form>
         </div>
       )}
+      {showInstallmentSelectModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in">
+          <div className="bg-white rounded-xl w-full max-w-2xl shadow-2xl my-auto relative overflow-hidden animate-slide-up">
+            <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
+            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-indigo-50/30">
+              <div>
+                <h3 className="text-2xl font-black text-slate-800 tracking-tight">Selecione o Parcelamento</h3>
+                <p className="text-sm text-slate-500 mt-1">Este aluno tem mais de um carnê gerado no sistema. Escolha qual quer imprimir.</p>
+              </div>
+              <button onClick={() => setShowInstallmentSelectModal(false)} className="p-2 bg-white text-slate-400 hover:text-red-500 rounded-lg shadow-sm transition-all hover:rotate-90"><X size={24} /></button>
+            </div>
+            <div className="p-8 space-y-4 max-h-[60vh] overflow-y-auto">
+              {availableInstallments.map((inst) => (
+                <div key={inst.id} className="flex items-center justify-between p-4 border border-slate-200 rounded-xl hover:border-indigo-300 hover:bg-indigo-50/30 transition-all cursor-pointer" onClick={() => { setShowInstallmentSelectModal(false); executePrintCarne(inst.id, printSortTarget); }}>
+                  <div>
+                    <h4 className="font-bold text-slate-800">{inst.description}</h4>
+                    <p className="text-sm text-slate-500">{inst.count} parcelas vinculadas • Total: <span className="font-bold text-green-600">R$ {inst.total.toFixed(2)}</span></p>
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
+                    <Printer size={20} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="p-8 pt-0 flex justify-end">
+              <button onClick={() => setShowInstallmentSelectModal(false)} className="px-6 py-3 text-slate-600 font-bold hover:bg-slate-100 rounded-xl transition-colors">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
       {showPrintCarneModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in">
           <div className="bg-white rounded-xl w-full max-w-2xl shadow-2xl my-auto relative overflow-hidden animate-slide-up">
