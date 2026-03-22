@@ -89,16 +89,24 @@ async function sendEvolutionMessage(asaasPaymentId, eventType) {
     if (!cob) return console.log(`[Evolution] Cobrança não encontrada: ${asaasPaymentId}`);
 
     const { data: schoolDataObj } = await supabase.from('school_data').select('data').eq('id', 1).single();
-    if (!schoolDataObj || !schoolDataObj.data) return;
+    if (!schoolDataObj || !schoolDataObj.data) {
+      console.log('[WhatsApp] Configurações school_data não encontradas');
+      return;
+    }
 
     const appData = schoolDataObj.data;
     const evoConfig = appData.evolutionConfig;
     const templates = appData.messageTemplates;
     
-    if (!evoConfig || !evoConfig.apiUrl || !evoConfig.apiKey || !evoConfig.instanceName) return;
+    if (!evoConfig || !evoConfig.apiUrl || !evoConfig.apiKey || !evoConfig.instanceName) {
+      console.log('[WhatsApp] Credenciais Evolution não configuradas.');
+      return;
+    }
+
+    console.log('[WhatsApp] Configurações encontradas');
 
     const aluno = appData.students?.find(s => s.id === cob.aluno_id);
-    if (!aluno) return;
+    if (!aluno) return console.log(`[WhatsApp] Aluno não encontrado localmente para a cobrança.`);
     
     let destinationNumber = '';
     let targetName = '';
@@ -116,45 +124,88 @@ async function sendEvolutionMessage(asaasPaymentId, eventType) {
       targetName = aluno.guardianName || aluno.name;
     }
     
-    if (!destinationNumber) return;
+    if (!destinationNumber) return console.log('[WhatsApp] Sem telefone para envio.');
 
+    // Remove tudo que não é número e adiciona 55 se vier sem DDI
     let cleanPhone = destinationNumber.replace(/\D/g, '');
     if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
 
+    console.log('[WhatsApp] Destinatário definido:', targetName, cleanPhone);
+
+    // Buscar no Asaas os detalhes recentes (description e URL do PDF)
+    const pResp = await fetch(`https://sandbox.asaas.com/api/v3/payments/${asaasPaymentId}`, { 
+      headers: { 'access_token': process.env.ASAAS_API_KEY } 
+    });
+    
+    let descricao = 'serviços educacionais';
+    let pdfUrl = cob.link_carne || cob.link_boleto || '';
+
+    if (pResp.ok) {
+      const pData = await pResp.json();
+      if (pData.description) descricao = pData.description;
+      pdfUrl = pData.transactionReceiptUrl || pData.bankSlipUrl || pData.invoiceUrl || pdfUrl;
+    }
+
+    // Fallbacks solicitados
+    const fbGerado = 'Olá {nome}, sua cobrança referente a {descricao} no valor de R$ {valor} foi gerada. Vencimento: {vencimento}.';
+    const fbPago = 'Olá {nome}, confirmamos o pagamento de R$ {valor} referente a {descricao}. Muito obrigado!';
+    const fbAtrasado = 'Olá {nome}, o boleto referente a {descricao} de R$ {valor} venceu em {vencimento}. Segue o PDF da 2ª via atualizada abaixo:';
+
     let templateText = '';
-    if (eventType === 'PAYMENT_CREATED') templateText = templates?.boletoGerado;
-    else if (eventType === 'PAYMENT_RECEIVED' || eventType === 'PAYMENT_CONFIRMED') templateText = templates?.pagamentoConfirmado;
-    else if (eventType === 'PAYMENT_OVERDUE') templateText = templates?.boletoVencido;
+    if (eventType === 'PAYMENT_CREATED') templateText = templates?.boletoGerado || fbGerado;
+    else if (eventType === 'PAYMENT_RECEIVED' || eventType === 'PAYMENT_CONFIRMED') templateText = templates?.pagamentoConfirmado || fbPago;
+    else if (eventType === 'PAYMENT_OVERDUE') templateText = templates?.boletoVencido || fbAtrasado;
     
     if (!templateText) return;
 
-    const linkBoleto = cob.link_carne || cob.link_boleto || '';
     let msgFinal = templateText
       .replace(/{nome}/g, targetName)
       .replace(/{nome_aluno}/g, aluno.name)
       .replace(/{valor}/g, parseFloat(cob.valor).toFixed(2).replace('.', ','))
       .replace(/{vencimento}/g, formatCobrancaDate(cob.vencimento))
-      .replace(/{link_boleto}/g, linkBoleto);
+      .replace(/{link_boleto}/g, pdfUrl)
+      .replace(/{descricao}/g, descricao);
 
-    const url = `${evoConfig.apiUrl.replace(/\/$/, '')}/message/sendText/${evoConfig.instanceName}`;
-    const payload = {
+    // Usa sendMedia se houver link para PDF, senão sendText
+    const endpoint = pdfUrl ? 'sendMedia' : 'sendText';
+    const url = `${evoConfig.apiUrl.replace(/\/$/, '')}/message/${endpoint}/${evoConfig.instanceName}`;
+    
+    let payload = {
       number: cleanPhone,
-      options: { delay: 1200, presence: "composing" },
-      textMessage: { text: msgFinal }
+      options: { delay: 1200, presence: "composing" }
     };
+
+    if (pdfUrl) {
+      payload.mediaMessage = {
+        mediatype: "document",
+        fileName: "Boleto_Atualizado.pdf",
+        caption: msgFinal,
+        media: pdfUrl
+      };
+    } else {
+      payload.textMessage = { text: msgFinal };
+    }
     
-    console.log(`[Evolution] POST para ${cleanPhone} (${eventType})`);
+    console.log(`[Evolution] POST para ${cleanPhone} (${eventType}) usando ${endpoint}`);
     
-    fetch(url, {
+    const sendResp = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': evoConfig.apiKey },
       body: JSON.stringify(payload)
-    }).catch(e => console.error('[Evolution] Erro catch de envio:', e.message));
+    });
+
+    if (sendResp.ok) {
+      console.log(`[WhatsApp] ✅ Disparo enviado com sucesso! A Evolution API recebeu a mensagem para o número:`, cleanPhone);
+    } else {
+      const respError = await sendResp.text();
+      console.error(`[WhatsApp] ❌ Erro no disparo Evolution API:`, sendResp.status, respError);
+    }
 
   } catch (error) {
-    console.log('[Evolution] Erro interno:', error.message);
+    console.error('[WhatsApp] Erro interno:', error.message);
   }
 }
+
 
 // Webhook Asaas
 app.post('/api/webhook_asaas', async (req, res) => {
@@ -217,11 +268,35 @@ app.post('/api/webhook_asaas', async (req, res) => {
     return res.status(200).json({ message: 'Webhook processado com sucesso' });
 
   } catch (error) {
-    console.error('Erro no Webhook:', error);
-    addLog('Webhook', 'Erro Interno', error.message);
-    return res.status(500).json({ error: 'Erro interno' });
-  }
-});
+      console.error('Erro no Webhook:', error);
+      addLog('Webhook', 'Erro Interno', error.message);
+      return res.status(500).json({ error: 'Erro interno' });
+    }
+  });
+  
+  // Webhook: Evolution API Status
+  app.post('/api/webhooks/evolution', (req, res) => {
+    try {
+      const payload = req.body;
+      
+      // Evolution usually pushes array in data for some events, or object
+      let messageData = payload.data || payload;
+      
+      // Identificar o status 'READ'
+      const status = messageData.status;
+      
+      if (status === 'READ') {
+        const phone = messageData.key?.remoteJid || messageData.remoteJid || 'Desconhecido';
+        const cleanPhone = phone.split('@')[0];
+        console.log(`👀 [WhatsApp STATUS] A mensagem referente à cobrança enviada para o número ${cleanPhone} foi LIDA pelo aluno/responsável!`);
+      }
+  
+      res.status(200).send('OK');
+    } catch (err) {
+      console.error('[Evolution Webhook] Erro ao processar payload:', err);
+      res.status(500).send('Erro interno');
+    }
+  });
 
 // Gerar Cobrança
 app.post('/api/gerar_cobranca', async (req, res) => {
@@ -708,11 +783,11 @@ app.post('/api/disparar_cobrancas', async (req, res) => {
     
     console.log(`[Disparo] ${atrasados.length} cobranças atrasadas encontradas.`);
     
-    // Dispara msg sem travar e não bloqueia a porta com "await" no for (em BG)
+    // Dispara msg em lote com await para não ser abortado prematuramente
     let enviadas = 0;
     for (const cob of atrasados) {
       if (cob.asaas_payment_id) {
-        sendEvolutionMessage(cob.asaas_payment_id, 'PAYMENT_OVERDUE');
+        await sendEvolutionMessage(cob.asaas_payment_id, 'PAYMENT_OVERDUE');
         enviadas++;
       }
     }

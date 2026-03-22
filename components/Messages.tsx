@@ -9,9 +9,9 @@ interface MessagesProps {
 }
 
 const defaultTemplates = {
-  boletoGerado: "Olá {nome}, o boleto do(a) aluno(a) {nome_aluno} no valor de R$ {valor} com vencimento em {vencimento} já está disponível! Link: {link_boleto}",
-  pagamentoConfirmado: "Olá {nome}, confirmamos o pagamento do(a) aluno(a) {nome_aluno} no valor de R$ {valor}. Agradecemos a pontualidade!",
-  boletoVencido: "Olá {nome}, notamos que o boleto do(a) aluno(a) {nome_aluno} no valor de R$ {valor} (vencimento em {vencimento}) encontra-se em aberto. Para emitir ou pagar, acesse o link: {link_boleto}",
+  boletoGerado: "Olá {nome}, sua cobrança referente a {descricao} no valor de R$ {valor} foi gerada. Vencimento: {vencimento}.",
+  pagamentoConfirmado: "Olá {nome}, confirmamos o pagamento de R$ {valor} referente a {descricao}. Muito obrigado!",
+  boletoVencido: "Olá {nome}, o boleto referente a {descricao} de R$ {valor} venceu em {vencimento}. Segue o PDF da 2ª via atualizada abaixo:",
   automationRules: {
     sendOnDueDate: true,
     sendDaysAfter: '1',
@@ -93,7 +93,7 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
             </p>
             <ul className="space-y-2 text-sm text-indigo-800 font-medium">
               <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> <code className="bg-white/60 px-2 py-0.5 rounded text-indigo-900">{'{nome}'}</code> - Nome do destinatário (Aluno ou Responsável)</li>
-              <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> <code className="bg-white/60 px-2 py-0.5 rounded text-indigo-900">{'{nome_aluno}'}</code> - Nome do Aluno</li>
+              <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> <code className="bg-white/60 px-2 py-0.5 rounded text-indigo-900">{'{descricao}'}</code> - Descrição da cobrança no Asaas</li>
               <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> <code className="bg-white/60 px-2 py-0.5 rounded text-indigo-900">{'{valor}'}</code> - Valor da cobrança</li>
               <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> <code className="bg-white/60 px-2 py-0.5 rounded text-indigo-900">{'{vencimento}'}</code> - Data de Vencimento</li>
               <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> <code className="bg-white/60 px-2 py-0.5 rounded text-indigo-900">{'{link_boleto}'}</code> - Link para PDF/Pgto</li>
