@@ -166,20 +166,41 @@ async function sendEvolutionMessage(asaasPaymentId, eventType) {
       .replace(/{link_boleto}/g, pdfUrl)
       .replace(/{descricao}/g, descricao);
 
-    // Usa sendMedia se houver link para PDF, senão sendText
-    const endpoint = pdfUrl ? 'sendMedia' : 'sendText';
-    const url = `${evoConfig.apiUrl.replace(/\/$/, '')}/message/${endpoint}/${evoConfig.instanceName}`;
-    
+    // Download do PDF e Conversão para Base64
+    let base64Pdf = null;
+    if (pdfUrl) {
+      try {
+        console.log(`[WhatsApp] Tentando baixar PDF: ${pdfUrl}`);
+        const pdfResp = await fetch(pdfUrl, {
+          headers: { 'Accept': 'application/pdf' }
+        });
+        
+        if (pdfResp.ok) {
+          const arrayBuffer = await pdfResp.arrayBuffer();
+          base64Pdf = Buffer.from(arrayBuffer).toString('base64');
+          console.log(`[WhatsApp] PDF baixado e convertido para Base64 com sucesso.`);
+        } else {
+          console.warn(`[WhatsApp] Falha ao baixar PDF (Status: ${pdfResp.status}). Fallback para texto ativado.`);
+        }
+      } catch (err) {
+        console.warn(`[WhatsApp] Exceção ao baixar PDF: ${err.message}. Fallback para texto ativado.`);
+      }
+    }
+
+    // Define endpoint e payload
+    let endpoint = 'sendText';
     let payload = {};
 
-    if (pdfUrl) {
+    if (base64Pdf) {
+      endpoint = 'sendMedia';
+      const isReceipt = eventType === 'PAYMENT_RECEIVED' || eventType === 'PAYMENT_CONFIRMED';
       payload = {
         number: cleanPhone,
         options: { delay: 1200, presence: "composing" },
         mediatype: "document",
         mimetype: "application/pdf",
-        fileName: "Boleto_Microtec.pdf",
-        media: pdfUrl,
+        fileName: isReceipt ? "Recibo_Microtec.pdf" : "Boleto_Microtec.pdf",
+        media: base64Pdf,
         caption: msgFinal
       };
     } else {
@@ -189,6 +210,8 @@ async function sendEvolutionMessage(asaasPaymentId, eventType) {
         textMessage: { text: msgFinal }
       };
     }
+
+    const url = `${evoConfig.apiUrl.replace(/\/$/, '')}/message/${endpoint}/${evoConfig.instanceName}`;
     
     console.log(`[Evolution] POST para ${cleanPhone} (${eventType}) usando ${endpoint}`);
     
