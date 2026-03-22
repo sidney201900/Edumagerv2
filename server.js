@@ -170,20 +170,24 @@ async function sendEvolutionMessage(asaasPaymentId, eventType) {
     const endpoint = pdfUrl ? 'sendMedia' : 'sendText';
     const url = `${evoConfig.apiUrl.replace(/\/$/, '')}/message/${endpoint}/${evoConfig.instanceName}`;
     
-    let payload = {
-      number: cleanPhone,
-      options: { delay: 1200, presence: "composing" }
-    };
+    let payload = {};
 
     if (pdfUrl) {
-      payload.mediaMessage = {
+      payload = {
+        number: cleanPhone,
+        options: { delay: 1200, presence: "composing" },
         mediatype: "document",
-        fileName: "Boleto_Atualizado.pdf",
-        caption: msgFinal,
-        media: pdfUrl
+        mimetype: "application/pdf",
+        fileName: "Boleto_Microtec.pdf",
+        media: pdfUrl,
+        caption: msgFinal
       };
     } else {
-      payload.textMessage = { text: msgFinal };
+      payload = {
+        number: cleanPhone,
+        options: { delay: 1200, presence: "composing" },
+        textMessage: { text: msgFinal }
+      };
     }
     
     console.log(`[Evolution] POST para ${cleanPhone} (${eventType}) usando ${endpoint}`);
