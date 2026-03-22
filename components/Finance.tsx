@@ -21,8 +21,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
 
   // Modais states
 
-  const [showPrintDropdown, setShowPrintDropdown] = useState(false);
-  const [printSortTarget, setPrintSortTarget] = useState<'dueDate' | ''>('');
+  // Instanciado dinamicamente para manter o form state
   const [showInstallmentSelectModal, setShowInstallmentSelectModal] = useState(false);
   const [availableInstallments, setAvailableInstallments] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -97,17 +96,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
     }
   };
 
-
-  const initPrintCarne = (sort: 'dueDate' | '') => {
-    setPrintSortTarget(sort);
-    if (filterStudent === 'all') {
-      setShowPrintCarneModal(true);
-    } else {
-      checkInstallmentsForStudent(filterStudent, sort);
-    }
-  };
-
-  const checkInstallmentsForStudent = (studentId: string, sort: 'dueDate' | '') => {
+  const checkInstallmentsForStudent = (studentId: string) => {
     const studentPayments = data.payments.filter(p => p.studentId === studentId && (p.asaasInstallmentId || p.installmentId || p.installment));
     const grouped = {} as Record<string, any>;
     studentPayments.forEach(p => {
@@ -125,7 +114,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
     }
 
     if (uniqueInstallments.length === 1) {
-      executePrintCarne(uniqueInstallments[0].id, sort);
+      executePrintCarne(uniqueInstallments[0].id);
     } else {
       setAvailableInstallments(uniqueInstallments);
       setShowInstallmentSelectModal(true);
@@ -134,13 +123,12 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
 
   // Função reutilizável para a impressão do carnê
   // Recebe o ID do parcelamento (ex: UUID puro), faz o acesso à rota do back-end que retorna o PDF binário diretamente.
-  const executePrintCarne = async (installmentId: string, sort?: string) => {
+  const executePrintCarne = async (installmentId: string) => {
     try {
       // Garante que é o UUID puro (remove ins_ caso exista)
       const cleanId = installmentId.replace(/^(ins_|inst_)/, '');
 
       let url = `/api/imprimir-carne/${cleanId}`;
-      if (sort) url += `?sort=${sort}&order=ASC`;
 
       // Abre a rota (que retorna Content-Type: application/pdf) em uma nova aba
       window.open(url, '_blank', 'noopener,noreferrer');
@@ -656,8 +644,8 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
     if (!paymentToEdit || isEditing) return;
     setIsEditing(true);
     try {
-      showAlert('Aguarde', 'Salvando alterações no Asaas...', 'info');
-      const response = await fetch(`/api/cobrancas/${paymentToEdit.id}`, {
+      const targetId = paymentToEdit.asaasPaymentId || paymentToEdit.id;
+      const response = await fetch(`/api/cobrancas/${targetId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ valor: parseFloat(editValue.replace(',', '.')), vencimento: editDate })
@@ -780,17 +768,11 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
 
           <div className="relative">
             <button
-              onClick={() => setShowPrintDropdown(!showPrintDropdown)}
+              onClick={() => setShowPrintCarneModal(true)}
               className="flex-1 sm:flex-none bg-white text-indigo-600 border border-indigo-200 px-6 py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-50 transition-all shadow-sm font-bold active:scale-95"
             >
-              <Printer size={20} /> Imprimir Carnê <ChevronDown size={14} />
+              <Printer size={20} /> Imprimir Carnê
             </button>
-            {showPrintDropdown && (
-              <div className="absolute top-full mt-2 w-64 bg-white border border-slate-200 shadow-xl rounded-xl z-50 py-2">
-                <button onClick={() => { setShowPrintDropdown(false); initPrintCarne(''); }} className="block w-full text-left px-4 py-2 hover:bg-slate-50 text-sm text-slate-700 font-bold transition-colors">Por ordem de impressão</button>
-                <button onClick={() => { setShowPrintDropdown(false); initPrintCarne('dueDate'); }} className="block w-full text-left px-4 py-2 hover:bg-slate-50 text-sm text-slate-700 font-bold transition-colors">Por ordem de vencimento</button>
-              </div>
-            )}
           </div>
 
           <button
@@ -1465,14 +1447,14 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
             </div>
             <div className="p-8 space-y-4 max-h-[60vh] overflow-y-auto">
               {availableInstallments.map((inst) => (
-                <div key={inst.id} className="flex items-center justify-between p-4 border border-slate-200 rounded-xl hover:border-indigo-300 hover:bg-indigo-50/30 transition-all cursor-pointer" onClick={() => { setShowInstallmentSelectModal(false); executePrintCarne(inst.id, printSortTarget); }}>
+                <div key={inst.id} className="flex items-center justify-between p-4 border border-slate-200 rounded-xl hover:border-indigo-300 hover:bg-indigo-50/30 transition-all">
                   <div>
                     <h4 className="font-bold text-slate-800">{inst.description}</h4>
                     <p className="text-sm text-slate-500">{inst.count} parcelas vinculadas • Total: <span className="font-bold text-green-600">R$ {inst.total.toFixed(2)}</span></p>
                   </div>
-                  <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
-                    <Printer size={20} />
-                  </div>
+                  <button onClick={() => { setShowInstallmentSelectModal(false); executePrintCarne(inst.id); }} className="px-4 py-2 bg-indigo-100 text-indigo-700 font-bold rounded-xl hover:bg-indigo-200 transition-colors flex items-center gap-2">
+                    <Printer size={18} /> Imprimir este Carnê
+                  </button>
                 </div>
               ))}
             </div>
@@ -1522,7 +1504,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
                   type="button"
                   onClick={() => {
                     if (selectedStudentForCarne) {
-                      checkInstallmentsForStudent(selectedStudentForCarne, printSortTarget);
+                      checkInstallmentsForStudent(selectedStudentForCarne);
                       setShowPrintCarneModal(false);
                       setSelectedStudentForCarne('');
                     } else {
