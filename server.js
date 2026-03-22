@@ -74,6 +74,88 @@ app.post('/api/upload/logo', upload.single('logo'), async (req, res) => {
   }
 });
 
+// Função formatadora de data
+function formatCobrancaDate(dateStr) {
+  if (!dateStr) return '';
+  const [Ano, Mes, Dia] = dateStr.split('-');
+  if (!Dia) return dateStr;
+  return `${Dia}/${Mes}/${Ano}`;
+}
+
+// Integarção WhatsApp Evolution API
+async function sendEvolutionMessage(asaasPaymentId, eventType) {
+  try {
+    const { data: cob } = await supabase.from('alunos_cobrancas').select('*').eq('asaas_payment_id', asaasPaymentId).single();
+    if (!cob) return console.log(`[Evolution] Cobrança não encontrada: ${asaasPaymentId}`);
+
+    const { data: schoolDataObj } = await supabase.from('school_data').select('data').eq('id', 1).single();
+    if (!schoolDataObj || !schoolDataObj.data) return;
+
+    const appData = schoolDataObj.data;
+    const evoConfig = appData.evolutionConfig;
+    const templates = appData.messageTemplates;
+    
+    if (!evoConfig || !evoConfig.apiUrl || !evoConfig.apiKey || !evoConfig.instanceName) return;
+
+    const aluno = appData.students?.find(s => s.id === cob.aluno_id);
+    if (!aluno) return;
+    
+    let destinationNumber = '';
+    let targetName = '';
+    
+    const birthDate = new Date(aluno.birthDate);
+    const ageDifMs = Date.now() - birthDate.getTime();
+    const ageDate = new Date(ageDifMs);
+    const age = Math.abs(ageDate.getUTCFullYear() - 1970);
+    
+    if (age >= 18) {
+      destinationNumber = aluno.phone;
+      targetName = aluno.name;
+    } else {
+      destinationNumber = aluno.guardianPhone || aluno.phone;
+      targetName = aluno.guardianName || aluno.name;
+    }
+    
+    if (!destinationNumber) return;
+
+    let cleanPhone = destinationNumber.replace(/\D/g, '');
+    if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
+
+    let templateText = '';
+    if (eventType === 'PAYMENT_CREATED') templateText = templates?.boletoGerado;
+    else if (eventType === 'PAYMENT_RECEIVED' || eventType === 'PAYMENT_CONFIRMED') templateText = templates?.pagamentoConfirmado;
+    else if (eventType === 'PAYMENT_OVERDUE') templateText = templates?.boletoVencido;
+    
+    if (!templateText) return;
+
+    const linkBoleto = cob.link_carne || cob.link_boleto || '';
+    let msgFinal = templateText
+      .replace(/{nome}/g, targetName)
+      .replace(/{nome_aluno}/g, aluno.name)
+      .replace(/{valor}/g, parseFloat(cob.valor).toFixed(2).replace('.', ','))
+      .replace(/{vencimento}/g, formatCobrancaDate(cob.vencimento))
+      .replace(/{link_boleto}/g, linkBoleto);
+
+    const url = `${evoConfig.apiUrl.replace(/\/$/, '')}/message/sendText/${evoConfig.instanceName}`;
+    const payload = {
+      number: cleanPhone,
+      options: { delay: 1200, presence: "composing" },
+      textMessage: { text: msgFinal }
+    };
+    
+    console.log(`[Evolution] POST para ${cleanPhone} (${eventType})`);
+    
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': evoConfig.apiKey },
+      body: JSON.stringify(payload)
+    }).catch(e => console.error('[Evolution] Erro catch de envio:', e.message));
+
+  } catch (error) {
+    console.log('[Evolution] Erro interno:', error.message);
+  }
+}
+
 // Webhook Asaas
 app.post('/api/webhook_asaas', async (req, res) => {
   const tokenRecebido = req.headers['asaas-access-token'];
@@ -89,6 +171,10 @@ app.post('/api/webhook_asaas', async (req, res) => {
     let updateData = {};
 
     switch (payload.event) {
+      case 'PAYMENT_CREATED':
+        // Apenas disparamos a evolução, mas não atualizamos banco aqui, pois o post gerar_cobranca salva.
+        sendEvolutionMessage(asaasPaymentId, 'PAYMENT_CREATED');
+        return res.status(200).json({ message: 'Webhook PAYMENT_CREATED processado' });
       case 'PAYMENT_RECEIVED':
       case 'PAYMENT_CONFIRMED':
         updateData = { 
@@ -96,9 +182,11 @@ app.post('/api/webhook_asaas', async (req, res) => {
           valor: payload.payment.value,
           data_pagamento: payload.payment.confirmedDate || payload.payment.paymentDate || new Date().toISOString().split('T')[0]
         };
+        sendEvolutionMessage(asaasPaymentId, 'PAYMENT_RECEIVED');
         break;
       case 'PAYMENT_OVERDUE':
         updateData = { status: 'ATRASADO', valor: payload.payment.value };
+        sendEvolutionMessage(asaasPaymentId, 'PAYMENT_OVERDUE');
         break;
       case 'PAYMENT_DELETED':
         updateData = { status: 'CANCELADO' };
@@ -553,8 +641,17 @@ app.put('/api/cobrancas/:id', async (req, res) => {
       return res.status(400).json({ error: err.errors?.[0]?.description || 'Erro ao editar no Asaas' });
     }
 
-    const { error: dbErr } = await supabase.from('alunos_cobrancas').update({ valor, vencimento }).or(`id.eq.${id},asaas_payment_id.eq.${targetAsaasId}`);
-    if (dbErr) return res.status(500).json({ error: 'Erro banco de dados local.' });
+    // Monta a query correta sem quebrar a tipagem de UUID do Supabase/Postgres
+    let queryField = isUUID(id) ? 'id' : 'asaas_payment_id';
+    const { error: dbErr } = await supabase
+      .from('alunos_cobrancas')
+      .update({ valor, vencimento })
+      .eq(queryField, id);
+
+    if (dbErr) {
+      console.warn('[Edição] Cobrança atualizada no Asaas, mas falhou no Supabase local:', dbErr.message);
+      // Não damos return 500 aqui para não quebrar a UI, já que a fonte da verdade atualizou
+    }
 
     addLog('Edição', `Cobrança ${targetAsaasId}`, { valor, vencimento });
     res.json({ message: 'Editado com sucesso' });
@@ -595,6 +692,37 @@ async function startServer() {
     const vite = await import('vite').then(m => m.createServer({ server: { middlewareMode: true }, appType: 'spa' }));
     app.use(vite.middlewares);
   }
+
+// Rota de Disparo Manual de Inadimplência via Evolution API
+app.post('/api/disparar_cobrancas', async (req, res) => {
+  try {
+    const { data: atrasados, error: err } = await supabase
+      .from('alunos_cobrancas')
+      .select('*')
+      .eq('status', 'ATRASADO');
+      
+    if (err) throw err;
+    if (!atrasados || atrasados.length === 0) {
+      return res.status(200).json({ message: 'Nenhuma cobrança atrasada encontrada.' });
+    }
+    
+    console.log(`[Disparo] ${atrasados.length} cobranças atrasadas encontradas.`);
+    
+    // Dispara msg sem travar e não bloqueia a porta com "await" no for (em BG)
+    let enviadas = 0;
+    for (const cob of atrasados) {
+      if (cob.asaas_payment_id) {
+        sendEvolutionMessage(cob.asaas_payment_id, 'PAYMENT_OVERDUE');
+        enviadas++;
+      }
+    }
+    
+    return res.status(200).json({ message: `${enviadas} mensagens em processamento.` });
+  } catch (error) {
+    console.error('Erro no disparo manual:', error);
+    return res.status(500).json({ error: 'Erro interno ao disparar cobranças.' });
+  }
+});
   
 // NOVO ENDPOINT: Imprimir Carnê pelo UUID do Parcelamento
 app.get('/api/imprimir-carne/:installmentId', async (req, res) => {

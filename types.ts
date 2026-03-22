@@ -224,6 +224,21 @@ export interface SchoolData {
   profile: SchoolProfile;
   logo?: string;
   lastUpdated?: string;
+  evolutionConfig?: {
+    apiUrl: string;
+    instanceName: string;
+    apiKey: string;
+  };
+  messageTemplates?: {
+    boletoGerado: string;
+    pagamentoConfirmado: string;
+    boletoVencido: string;
+    automationRules: {
+      sendOnDueDate: boolean;
+      sendDaysAfter: string;
+      repeatEveryDays: string;
+    };
+  };
 }
 
 export enum View {
@@ -240,5 +255,6 @@ export enum View {
   Handouts = 'handouts',
   Employees = 'employees',
   Settings = 'settings',
-  Users = 'users'
+  Users = 'users',
+  Messages = 'messages'
 }

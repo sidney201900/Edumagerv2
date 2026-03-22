@@ -20,7 +20,8 @@ import {
   CloudOff,
   Library,
   Briefcase,
-  LogOut
+  LogOut,
+  MessageSquare
 } from 'lucide-react';
 import { isSupabaseConfigured } from '../services/supabase';
 import { View, User } from '../types';
@@ -50,6 +51,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, logo }) =
     { id: View.Handouts, icon: Library, label: 'Apostilas' },
     { id: View.Employees, icon: Briefcase, label: 'Funcionários' },
     { id: View.Users, icon: Shield, label: 'Usuários' },
+    { id: View.Messages, icon: MessageSquare, label: 'Mensagens' },
     { id: View.Settings, icon: Settings, label: 'Configurações' },
   ];
 

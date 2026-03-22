@@ -18,6 +18,7 @@ import Auth from './components/Auth';
 import UserManagement from './components/UserManagement';
 import Handouts from './components/Handouts';
 import Employees from './components/Employees';
+import Messages from './components/Messages';
 import { Cloud, CloudOff, RefreshCw, AlertCircle } from 'lucide-react';
 import { isSupabaseConfigured } from './services/supabase';
 import { DialogProvider } from './DialogContext';
@@ -164,6 +165,8 @@ const App = () => {
         return <Employees data={data} updateData={updateData} />;
       case View.Users:
         return <UserManagement data={data} updateData={updateData} />;
+      case View.Messages:
+        return <Messages data={data} updateData={updateData} />;
       case View.Settings:
         return <Settings data={data} updateData={updateData} setData={setData} />;
       default:

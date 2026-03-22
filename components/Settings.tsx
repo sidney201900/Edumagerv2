@@ -22,6 +22,19 @@ const Settings: React.FC<SettingsProps> = ({ data, updateData, setData }) => {
 
   const [profileForm, setProfileForm] = useState<SchoolProfile>(currentProfile);
 
+  const [showEvolutionModal, setShowEvolutionModal] = useState(false);
+  const [evolutionForm, setEvolutionForm] = useState({
+    apiUrl: data.evolutionConfig?.apiUrl || '',
+    instanceName: data.evolutionConfig?.instanceName || '',
+    apiKey: data.evolutionConfig?.apiKey || ''
+  });
+
+  const saveEvolutionConfig = () => {
+    updateData({ evolutionConfig: evolutionForm });
+    setShowEvolutionModal(false);
+    showAlert('Sucesso', 'Configurações da Evolution API salvas!', 'success');
+  };
+
   React.useEffect(() => {
     setProfileForm(currentProfile);
   }, [selectedProfileId, profiles]);
@@ -521,6 +534,34 @@ using (true);`;
               </label>
             </div>
 
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xl space-y-4">
+              <div className="flex items-center gap-3 text-indigo-600">
+                <div className="p-2 bg-indigo-50 rounded-lg">
+                  <FileText size={20} />
+                </div>
+                <h3 className="text-lg font-black text-slate-800">Evolution API</h3>
+              </div>
+              
+              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
+                {data.evolutionConfig?.apiUrl ? (
+                  <div className="space-y-2 text-sm text-slate-600">
+                    <p><strong>URL:</strong> {data.evolutionConfig.apiUrl}</p>
+                    <p><strong>Instância:</strong> {data.evolutionConfig.instanceName}</p>
+                    <p><strong>API Key:</strong> ••••••••</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 text-center">Nenhuma credencial configurada.</p>
+                )}
+              </div>
+
+              <button 
+                onClick={() => setShowEvolutionModal(true)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all font-bold text-xs shadow-md"
+              >
+                <Plus size={16} /> Configurar Credenciais
+              </button>
+            </div>
+
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xl">
               <button 
                 onClick={() => showConfirm(
@@ -565,6 +606,73 @@ using (true);`;
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Evolution API Modal */}
+      {showEvolutionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <h3 className="text-xl font-bold text-slate-800">Credenciais Evolution API</h3>
+              <button 
+                onClick={() => setShowEvolutionModal(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">URL da API</label>
+                <input 
+                  type="text" 
+                  value={evolutionForm.apiUrl} 
+                  onChange={e => setEvolutionForm({...evolutionForm, apiUrl: e.target.value})}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all shadow-sm text-sm"
+                  placeholder="https://api.evolution.com"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nome da Instância</label>
+                <input 
+                  type="text" 
+                  value={evolutionForm.instanceName} 
+                  onChange={e => setEvolutionForm({...evolutionForm, instanceName: e.target.value})}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all shadow-sm text-sm"
+                  placeholder="minha-instancia"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">API Key</label>
+                <input 
+                  type="password" 
+                  value={evolutionForm.apiKey} 
+                  onChange={e => setEvolutionForm({...evolutionForm, apiKey: e.target.value})}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all shadow-sm text-sm"
+                  placeholder="••••••••••••"
+                />
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
+              <button 
+                onClick={() => setShowEvolutionModal(false)}
+                className="px-5 py-2.5 text-slate-600 font-semibold hover:bg-slate-200 rounded-xl transition-all"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={saveEvolutionConfig}
+                className="px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-md transition-all flex items-center gap-2"
+              >
+                <CheckCircle size={18} /> Confirmar
+              </button>
+            </div>
           </div>
         </div>
       )}
