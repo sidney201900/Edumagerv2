@@ -45,6 +45,7 @@ const Students: React.FC<StudentsProps> = ({ data, updateData }) => {
     rg: '',
     rgIssueDate: '',
     guardianName: '',
+    guardianPhone: '',
     guardianCpf: '',
     guardianBirthDate: '',
     classId: '',
@@ -179,8 +180,8 @@ const Students: React.FC<StudentsProps> = ({ data, updateData }) => {
     setFormData(prev => ({ ...prev, [field]: maskCPF(e.target.value) }));
   };
 
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({ ...prev, phone: maskPhone(e.target.value) }));
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>, field: 'phone' | 'guardianPhone' = 'phone') => {
+    setFormData(prev => ({ ...prev, [field]: maskPhone(e.target.value) }));
   };
 
   const handleCEPChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -584,6 +585,7 @@ const Students: React.FC<StudentsProps> = ({ data, updateData }) => {
         rg: '',
         rgIssueDate: '',
         guardianName: '',
+        guardianPhone: '',
         guardianCpf: '',
         guardianBirthDate: '',
         classId: '',
@@ -647,8 +649,8 @@ const Students: React.FC<StudentsProps> = ({ data, updateData }) => {
           showAlert('Atenção', '⚠️ Para alunos menores de 18 anos, os dados do responsável são obrigatórios.', 'warning');
           return;
         }
-        if (!formData.guardianName || !formData.guardianCpf) {
-          showAlert('Atenção', '⚠️ Nome e CPF do responsável são obrigatórios para menores de 18 anos.', 'warning');
+        if (!formData.guardianName || !formData.guardianCpf || !formData.guardianPhone) {
+          showAlert('Atenção', '⚠️ Nome, CPF e Telefone do responsável são obrigatórios para menores de 18 anos.', 'warning');
           return;
         }
         if (formData.guardianCpf && !isValidCPF(formData.guardianCpf)) {
@@ -881,6 +883,7 @@ const Students: React.FC<StudentsProps> = ({ data, updateData }) => {
       rg: '',
       rgIssueDate: '',
       guardianName: '',
+      guardianPhone: '',
       guardianCpf: '',
       guardianBirthDate: '',
       classId: '',
@@ -1485,6 +1488,19 @@ const Students: React.FC<StudentsProps> = ({ data, updateData }) => {
                               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-red-500 font-bold">Inválido</span>
                             )}
                           </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                            Telefone do Responsável {formData.birthDate && calculateAge(formData.birthDate)! < 18 && <span className="text-red-500">*</span>}
+                          </label>
+                          <input 
+                            type="tel"
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all font-medium text-sm"
+                            value={formData.guardianPhone || ''} 
+                            onChange={e => handlePhoneChange(e, 'guardianPhone')} 
+                            placeholder="(00) 00000-0000"
+                            maxLength={15}
+                          />
                         </div>
                         <div>
                           <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Data de Nascimento</label>

@@ -30,6 +30,7 @@ export interface Student {
   rg?: string; // Novo campo
   rgIssueDate?: string; // Novo campo: YYYY-MM-DD
   guardianName?: string;
+  guardianPhone?: string;
   guardianCpf?: string;
   guardianBirthDate?: string; // Novo campo
   classId: string;

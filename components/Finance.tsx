@@ -431,6 +431,32 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
       return;
     }
 
+    let asaasName = student.name;
+    let asaasCpf = (student.cpf || '').replace(/\D/g, '');
+    let asaasPhone = student.phone?.replace(/\D/g, '');
+    let asaasDesc = formData.description || 'Mensalidade';
+
+    if (student.birthDate) {
+      const today = new Date();
+      const birth = new Date(student.birthDate);
+      let age = today.getFullYear() - birth.getFullYear();
+      const m = today.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+        age--;
+      }
+      
+      if (age < 18) {
+        if (!student.guardianName || !student.guardianCpf) {
+          showAlert('Atenção', `O aluno ${student.name} tem menos de 18 anos, mas faltam dados do Responsável (Nome ou CPF) em seu cadastro. Atualize o cadastro primeiro!`, 'warning');
+          return;
+        }
+        asaasName = student.guardianName;
+        asaasCpf = student.guardianCpf.replace(/\D/g, '');
+        asaasPhone = student.guardianPhone ? student.guardianPhone.replace(/\D/g, '') : asaasPhone;
+        asaasDesc = `${asaasDesc} - Aluno: ${student.name}`;
+      }
+    }
+
     const newPayments: Payment[] = [];
 
     let baseDateStr = formData.dueDate;
@@ -459,13 +485,12 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
         installmentNumber: manualInstallments > 1 ? i + 1 : undefined,
         totalInstallments: manualInstallments > 1 ? manualInstallments : undefined,
         description: manualInstallments > 1
-          ? `${formData.description || 'Mensalidade'} (${i + 1}/${manualInstallments})`
-          : formData.description
+          ? `${asaasDesc} (${i + 1}/${manualInstallments})`
+          : asaasDesc
       });
     }
 
     try {
-      const rawCpf = (student.cpf || student.guardianCpf || '').replace(/\D/g, '');
       const isoDueDate = newPayments[0].dueDate;
 
       const response = await fetch('/api/gerar_cobranca', {
@@ -473,21 +498,21 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           aluno_id: student.id,
-          nome: student.name,
-          cpf: rawCpf,
+          nome: asaasName,
+          cpf: asaasCpf,
           email: student.email,
           valor: formData.amount,
           vencimento: isoDueDate,
           multa: formData.fine,
           juros: formData.interest,
           desconto: Number(formData.discount) || 0,
-          telefone: student.phone,
+          telefone: asaasPhone,
           cep: student.addressZip,
           endereco: student.addressStreet,
           numero: student.addressNumber,
           bairro: student.addressNeighborhood,
           nascimento: student.birthDate,
-          descricao: formData.description || 'Mensalidade',
+          descricao: asaasDesc,
           parcelas: manualInstallments
         })
       });
@@ -914,21 +939,23 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
                             <Layers size={12} /> {group.payments.length} Parcelas
                           </span>
                         </td>
-                        <td className="px-6 py-5 text-right flex justify-end gap-2">
-                          <button
-                            onClick={() => toggleInstallment(group.installmentId)}
-                            className="px-3 py-1.5 bg-white text-slate-700 border border-slate-200 rounded-lg text-xs font-bold hover:bg-slate-50 transition-colors inline-flex items-center gap-1.5"
-                          >
-                            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                            {isExpanded ? 'Ocultar' : 'Ver Parcelas'}
-                          </button>
-                          <button
-                            onClick={() => executePrintCarne(group.installmentId, 'dueDate')}
-                            className="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors inline-flex items-center gap-1.5 border border-indigo-100"
-                          >
-                            <Printer size={14} /> Imprimir Carnê
-                          </button>
-                          <button onClick={() => { setCarneToDelete(group); setCarneSelectedPayments(group.payments.filter(p => p.status !== 'paid').map(p => p.asaasPaymentId || p.id)); }} className="p-2 text-slate-400 hover:text-red-600 transition-all" title="Excluir Carnê Completo (Asaas)"><Trash2 size={18} /></button>
+                        <td className="px-6 py-5 text-right whitespace-nowrap">
+                          <div className="flex justify-end items-center gap-2">
+                            <button
+                              onClick={() => toggleInstallment(group.installmentId)}
+                              className="px-3 py-1.5 bg-white text-slate-700 border border-slate-200 rounded-lg text-xs font-bold hover:bg-slate-50 transition-colors inline-flex items-center gap-1.5"
+                            >
+                              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                              {isExpanded ? 'Ocultar' : 'Ver Parcelas'}
+                            </button>
+                            <button
+                              onClick={() => executePrintCarne(group.installmentId)}
+                              className="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors inline-flex items-center gap-1.5 border border-indigo-100"
+                            >
+                              <Printer size={14} /> Imprimir Carnê
+                            </button>
+                            <button onClick={() => { setCarneToDelete(group); setCarneSelectedPayments(group.payments.filter(p => p.status !== 'paid').map(p => p.asaasPaymentId || p.id)); }} className="p-2 text-slate-400 hover:text-red-600 transition-all" title="Excluir Carnê Completo (Asaas)"><Trash2 size={18} /></button>
+                          </div>
                         </td>
                       </tr>
                       {isExpanded && group.payments.map(payment => {
@@ -959,7 +986,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
                             </td>
                             <td className="px-4 py-4">{getStatusBadge(payment)}</td>
                             <td className="px-4 py-4">
-                              <div className="flex justify-end gap-1 flex-wrap">
+                              <div className="flex justify-end items-center gap-2 whitespace-nowrap">
                                 {payment.asaasPaymentId && (
                                   <>
                                     {(payment.status === 'pending' || payment.status === 'overdue') && (
@@ -976,7 +1003,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
                                 )}
                                 {(payment.installmentId || payment.asaasInstallmentId || group.installmentId) && (
                                   <button
-                                    onClick={() => executePrintCarne(payment.installmentId || payment.asaasInstallmentId || group.installmentId, 'dueDate')}
+                                    onClick={() => executePrintCarne(payment.installmentId || payment.asaasInstallmentId || group.installmentId)}
                                     className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-[10px] font-bold hover:bg-indigo-100 inline-flex items-center gap-1"
                                     title="Imprimir Carnê Completo"
                                   >
@@ -1032,14 +1059,14 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
                       </td>
                       <td className="px-4 py-5">{getStatusBadge(payment)}</td>
                       <td className="px-4 py-5">
-                        <div className="flex justify-end gap-1 flex-wrap items-center">
+                        <div className="flex justify-end items-center gap-2 whitespace-nowrap">
                           {payment.asaasPaymentId && (<>
                             {(payment.status === 'pending' || payment.status === 'overdue') && (<button onClick={() => handleOpenPaymentLink(payment.asaasPaymentId!, 'boleto')} className="px-2.5 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors inline-flex items-center gap-1"><Barcode size={13} /> Boleto</button>)}
                             {(payment.status === 'paid' || payment.status === 'received' || payment.status === 'confirmed') && (<button onClick={() => handleOpenPaymentLink(payment.asaasPaymentId!, 'recibo')} className="px-2.5 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors inline-flex items-center gap-1 border border-emerald-100"><Receipt size={13} /> Recibo</button>)}
                           </>)}
                           {(payment.installmentId || payment.asaasInstallmentId) && (
                             <button
-                              onClick={() => executePrintCarne(payment.installmentId || payment.asaasInstallmentId, 'dueDate')}
+                              onClick={() => executePrintCarne(payment.installmentId || payment.asaasInstallmentId)}
                               className="px-2.5 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors inline-flex items-center gap-1 border border-indigo-100"
                               title="Imprimir Carnê Completo"
                             >
