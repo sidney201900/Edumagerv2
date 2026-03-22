@@ -139,11 +139,27 @@ async function sendEvolutionMessage(asaasPaymentId, eventType) {
     
     let descricao = 'serviços educacionais';
     let pdfUrl = cob.link_carne || cob.link_boleto || '';
+    let isCarneCompleto = false;
 
     if (pResp.ok) {
       const pData = await pResp.json();
       if (pData.description) descricao = pData.description;
-      pdfUrl = pData.transactionReceiptUrl || pData.bankSlipUrl || pData.invoiceUrl || pdfUrl;
+
+      // 1. Identificar se é Carnê e evitar Spam
+      if (pData.installment && eventType === 'PAYMENT_CREATED') {
+        if (pData.installmentNumber > 1) {
+          console.log(`[WhatsApp] Ignorando envio da parcela ${pData.installmentNumber} para não spammar o aluno com o carnê repetido.`);
+          return;
+        }
+        
+        // É a primeira parcela do carnê
+        isCarneCompleto = true;
+        // 2. Apontar pdfUrl para a rota de carnês completo do Asaas
+        pdfUrl = `https://sandbox.asaas.com/api/v3/installments/${pData.installment}/paymentBook`;
+      } else {
+        // 3. Manter o fluxo para cobranças avulsas
+        pdfUrl = pData.transactionReceiptUrl || pData.bankSlipUrl || pData.invoiceUrl || pdfUrl;
+      }
     }
 
     // Fallbacks solicitados
@@ -171,9 +187,16 @@ async function sendEvolutionMessage(asaasPaymentId, eventType) {
     if (pdfUrl) {
       try {
         console.log(`[WhatsApp] Tentando baixar PDF: ${pdfUrl}`);
-        const pdfResp = await fetch(pdfUrl, {
+        
+        const fetchOptions = {
           headers: { 'Accept': 'application/pdf' }
-        });
+        };
+        // Injeta chave do Asaas caso a rota demande auth (ex: paymentBook do Installment)
+        if (pdfUrl.includes('asaas.com/api')) {
+          fetchOptions.headers['access_token'] = process.env.ASAAS_API_KEY;
+        }
+
+        const pdfResp = await fetch(pdfUrl, fetchOptions);
         
         if (pdfResp.ok) {
           const arrayBuffer = await pdfResp.arrayBuffer();
@@ -199,7 +222,7 @@ async function sendEvolutionMessage(asaasPaymentId, eventType) {
         options: { delay: 1200, presence: "composing" },
         mediatype: "document",
         mimetype: "application/pdf",
-        fileName: isReceipt ? "Recibo_Microtec.pdf" : "Boleto_Microtec.pdf",
+        fileName: isCarneCompleto ? "Carne_Microtec.pdf" : (isReceipt ? "Recibo_Microtec.pdf" : "Boleto_Microtec.pdf"),
         media: base64Pdf,
         caption: msgFinal
       };
