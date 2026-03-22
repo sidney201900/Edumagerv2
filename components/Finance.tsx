@@ -431,32 +431,6 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
       return;
     }
 
-    let asaasName = student.name;
-    let asaasCpf = (student.cpf || '').replace(/\D/g, '');
-    let asaasPhone = student.phone?.replace(/\D/g, '');
-    let asaasDesc = formData.description || 'Mensalidade';
-
-    if (student.birthDate) {
-      const today = new Date();
-      const birth = new Date(student.birthDate);
-      let age = today.getFullYear() - birth.getFullYear();
-      const m = today.getMonth() - birth.getMonth();
-      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
-        age--;
-      }
-      
-      if (age < 18) {
-        if (!student.guardianName || !student.guardianCpf) {
-          showAlert('Atenção', `O aluno ${student.name} tem menos de 18 anos, mas faltam dados do Responsável (Nome ou CPF) em seu cadastro. Atualize o cadastro primeiro!`, 'warning');
-          return;
-        }
-        asaasName = student.guardianName;
-        asaasCpf = student.guardianCpf.replace(/\D/g, '');
-        asaasPhone = student.guardianPhone ? student.guardianPhone.replace(/\D/g, '') : asaasPhone;
-        asaasDesc = `${asaasDesc} - Aluno: ${student.name}`;
-      }
-    }
-
     const newPayments: Payment[] = [];
 
     let baseDateStr = formData.dueDate;
@@ -485,34 +459,57 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
         installmentNumber: manualInstallments > 1 ? i + 1 : undefined,
         totalInstallments: manualInstallments > 1 ? manualInstallments : undefined,
         description: manualInstallments > 1
-          ? `${asaasDesc} (${i + 1}/${manualInstallments})`
-          : asaasDesc
+          ? `${formData.description || 'Mensalidade'} (${i + 1}/${manualInstallments})`
+          : formData.description
       });
     }
 
     try {
       const isoDueDate = newPayments[0].dueDate;
 
+      // Cálculo preciso de idade
+      let isMinor = false;
+      if (student.birthDate) {
+        const birthDate = new Date(student.birthDate);
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        isMinor = age < 18;
+      }
+
+      // Definição dos dados que irão para o Asaas
+      const finalName = (isMinor && student.guardianName) ? student.guardianName : student.name;
+      const rawCpf = (student.cpf || '').replace(/\D/g, '');
+      const rawGuardianCpf = (student.guardianCpf || '').replace(/\D/g, '');
+      const finalCpf = (isMinor && rawGuardianCpf) ? rawGuardianCpf : rawCpf;
+      const finalPhone = (isMinor && student.guardianPhone) ? student.guardianPhone : student.phone;
+
+      const originalDesc = formData.description || 'Mensalidade';
+      const finalDescription = isMinor ? `${originalDesc} - Aluno: ${student.name}` : originalDesc;
+
       const response = await fetch('/api/gerar_cobranca', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           aluno_id: student.id,
-          nome: asaasName,
-          cpf: asaasCpf,
+          nome: finalName,
+          cpf: finalCpf,
           email: student.email,
           valor: formData.amount,
           vencimento: isoDueDate,
           multa: formData.fine,
           juros: formData.interest,
           desconto: Number(formData.discount) || 0,
-          telefone: asaasPhone,
+          telefone: finalPhone,
           cep: student.addressZip,
           endereco: student.addressStreet,
           numero: student.addressNumber,
           bairro: student.addressNeighborhood,
           nascimento: student.birthDate,
-          descricao: asaasDesc,
+          descricao: finalDescription,
           parcelas: manualInstallments
         })
       });
