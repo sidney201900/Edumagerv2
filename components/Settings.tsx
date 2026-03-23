@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { SchoolData, SchoolProfile } from '../types';
 import { dbService } from '../services/dbService';
-import { Download, Upload, Trash2, Database, School, Camera, FileText, Info, AlertTriangle, X, CheckCircle, AlertCircle, Cloud, HelpCircle, RefreshCw, Plus } from 'lucide-react';
+import { Download, Upload, Trash2, Database, School, Camera, FileText, Info, AlertTriangle, X, CheckCircle, AlertCircle, Cloud, HelpCircle, RefreshCw, Plus, User } from 'lucide-react';
 import { isSupabaseConfigured, uploadLogo } from '../services/supabase';
 import { useDialog } from '../DialogContext';
 import imageCompression from 'browser-image-compression';
@@ -19,6 +19,19 @@ const Settings: React.FC<SettingsProps> = ({ data, updateData, setData }) => {
   const [globalLogo, setGlobalLogo] = useState<string>(data.logo || '');
   
   const currentProfile = profiles.find(p => p.id === selectedProfileId) || profiles[0];
+
+  const currentDirector = useMemo(() => {
+    const employees = data.employees || [];
+    const categories = data.employeeCategories || [];
+    
+    return employees.find(e => {
+      const cat = categories.find(c => c.id === e.categoryId);
+      const catName = cat?.name.toLowerCase() || '';
+      const empName = e.name.toLowerCase();
+      return catName.includes('diretor') || catName.includes('diretoria') || 
+             empName.includes('diretor') || empName.includes('diretoria');
+    });
+  }, [data.employees, data.employeeCategories]);
 
   const [profileForm, setProfileForm] = useState<SchoolProfile>(currentProfile);
 
@@ -560,6 +573,27 @@ using (true);`;
               >
                 <Plus size={16} /> Configurar Credenciais
               </button>
+            </div>
+
+            <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-6 rounded-xl border border-indigo-100 shadow-xl space-y-4">
+              <div className="flex items-center gap-3 text-indigo-800">
+                <div className="p-2 bg-white rounded-lg shadow-sm">
+                  <User size={20} className="text-indigo-600" />
+                </div>
+                <h3 className="text-lg font-black text-slate-800">Responsável Legal / Diretor</h3>
+              </div>
+              
+              <div className="p-4 rounded-lg bg-white border border-indigo-50 shadow-sm">
+                {currentDirector ? (
+                  <div className="space-y-2 text-sm text-slate-700">
+                    <p><strong>Nome:</strong> {currentDirector.name}</p>
+                    <p><strong>CPF:</strong> {currentDirector.cpf}</p>
+                    <p className="text-xs text-indigo-500 mt-2 font-medium bg-indigo-50 inline-block px-2 py-1 rounded">Este responsável assinará automaticamente os documentos.</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 text-center">Nenhum diretor localizado. Cadastre um funcionário como Diretor na aba Funcionários.</p>
+                )}
+              </div>
             </div>
 
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xl">

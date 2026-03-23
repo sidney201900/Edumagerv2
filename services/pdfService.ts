@@ -152,6 +152,33 @@ const getSignerInfo = (student: Student) => {
 };
 
 /**
+ * Helper to get Director info from employees
+ */
+const getDirectorInfo = (schoolData: SchoolData) => {
+  const employees = schoolData.employees || [];
+  const categories = schoolData.employeeCategories || [];
+  
+  const director = employees.find(e => {
+    const cat = categories.find(c => c.id === e.categoryId);
+    const catName = cat?.name.toLowerCase() || '';
+    const empName = e.name.toLowerCase();
+    const roleMatch = catName.includes('diretor') || catName.includes('diretoria');
+    const nameMatch = empName.includes('diretor') || empName.includes('diretoria');
+    return roleMatch || nameMatch;
+  });
+
+  if (director) {
+    return {
+      name: director.name,
+      cpf: director.cpf,
+      role: 'Diretor'
+    };
+  }
+  
+  return null;
+};
+
+/**
  * Helper to add page numbers to footer
  */
 const addPageNumbers = (doc: any) => {
@@ -361,7 +388,7 @@ const drawContractText = async (doc: any, text: string, x: number, y: number, ma
     if (title) {
       if (currentY > pageHeight - bottomMargin - 10) {
         doc.addPage();
-        currentY = await addContractHeader(doc, schoolData);
+        currentY = await addHeader(doc, schoolData);
       }
       doc.setFont('helvetica', 'bold');
       doc.text(title, startX, currentY);
@@ -374,7 +401,7 @@ const drawContractText = async (doc: any, text: string, x: number, y: number, ma
     for (let i = 0; i < lines.length; i++) {
       if (currentY > pageHeight - bottomMargin) {
         doc.addPage();
-        currentY = await addContractHeader(doc, schoolData);
+        currentY = await addHeader(doc, schoolData);
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(fontSize);
       }
@@ -530,14 +557,19 @@ export const pdfService = {
     doc.text(signer.label, 55, sigY + 13, { align: 'center' });
 
     // School Signature
+    const director = getDirectorInfo(schoolData);
+    const dirName = director ? director.name.toUpperCase() : schoolData.profile.name.toUpperCase();
+    const dirDoc = director ? `CPF: ${director.cpf}` : `CNPJ: ${schoolData.profile.cnpj || '---'}`;
+    const dirRole = director ? director.role : 'Assinatura da Escola';
+
     doc.line(120, sigY, 190, sigY);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
-    doc.text(schoolData.profile.name.toUpperCase(), 155, sigY + 5, { align: 'center' });
+    doc.text(dirName, 155, sigY + 5, { align: 'center' });
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.text(`CNPJ: ${schoolData.profile.cnpj || '---'}`, 155, sigY + 9, { align: 'center' });
-    doc.text('Assinatura da Escola', 155, sigY + 13, { align: 'center' });
+    doc.text(dirDoc, 155, sigY + 9, { align: 'center' });
+    doc.text(dirRole, 155, sigY + 13, { align: 'center' });
 
     doc.save(`ficha_matricula_${student.name.replace(/\s+/g, '_').toLowerCase()}.pdf`);
   },
@@ -652,7 +684,7 @@ export const pdfService = {
       format: 'a4'
     }) as any;
 
-    let currentY = await addContractHeader(doc, schoolData);
+    let currentY = await addHeader(doc, schoolData);
 
     // Title
     doc.setFontSize(14);
@@ -686,10 +718,11 @@ export const pdfService = {
     const pageHeight = doc.internal.pageSize.height;
     const signer = getSignerInfo(student);
 
-    // Check if signatures fit on current page (need about 40mm)
-    if (currentY > pageHeight - 40) {
+    // Check if signatures fit on current page (need about 45mm to keep them together without breaking)
+    if (currentY > pageHeight - 45) {
       doc.addPage();
-      currentY = await addContractHeader(doc, schoolData);
+      currentY = await addHeader(doc, schoolData);
+      currentY += 10;
     } else {
       currentY += 25; // Extra space before signatures
     }
@@ -698,30 +731,32 @@ export const pdfService = {
     doc.setDrawColor(0);
     doc.setLineWidth(0.2);
 
-    const col1X = margin;
-    const col1Width = (maxWidth / 2) - 5;
-    const col2X = margin + (maxWidth / 2) + 5;
-    const col2Width = (maxWidth / 2) - 5;
+    const sigY = currentY;
 
     // Signer Signature (Left Column)
-    doc.line(col1X, currentY, col1X + col1Width, currentY);
+    doc.line(20, sigY, 90, sigY);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-
-    const signerText = signer.label === 'ASSINATURA DO ALUNO'
-      ? `Assinatura do Aluno: ${signer.name.toUpperCase()}`
-      : `Assinatura do Responsável Legal: ${signer.name.toUpperCase()}`;
-
-    doc.text(signerText, col1X + (col1Width / 2), currentY + 5, { align: 'center' });
+    doc.setFontSize(9);
+    doc.text(signer.name.toUpperCase(), 55, sigY + 5, { align: 'center' });
     doc.setFont('helvetica', 'normal');
-    doc.text(`CPF: ${signer.cpf || '---'}`, col1X + (col1Width / 2), currentY + 10, { align: 'center' });
+    doc.setFontSize(8);
+    doc.text(`CPF: ${signer.cpf || '---'}`, 55, sigY + 9, { align: 'center' });
+    doc.text(signer.label, 55, sigY + 13, { align: 'center' });
 
     // School Signature (Right Column)
-    doc.line(col2X, currentY, col2X + col2Width, currentY);
+    const director = getDirectorInfo(schoolData);
+    const dirName = director ? director.name.toUpperCase() : schoolData.profile.name.toUpperCase();
+    const dirDoc = director ? `CPF: ${director.cpf}` : `CNPJ: ${schoolData.profile.cnpj || '---'}`;
+    const dirRole = director ? director.role : 'Assinatura da Escola';
+
+    doc.line(120, sigY, 190, sigY);
     doc.setFont('helvetica', 'bold');
-    doc.text('Microtec Informática Cursos', col2X + (col2Width / 2), currentY + 5, { align: 'center' });
+    doc.setFontSize(9);
+    doc.text(dirName, 155, sigY + 5, { align: 'center' });
     doc.setFont('helvetica', 'normal');
-    doc.text('Administração', col2X + (col2Width / 2), currentY + 10, { align: 'center' });
+    doc.setFontSize(8);
+    doc.text(dirDoc, 155, sigY + 9, { align: 'center' });
+    doc.text(dirRole, 155, sigY + 13, { align: 'center' });
 
     // Add Page Numbers to all pages
     addPageNumbers(doc);
