@@ -118,14 +118,8 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
     let aluno = null;
 
     if (eventType === 'PAYMENT_DELETED' && paymentPayload) {
-      // Find student using Asaas customer CPF
-      const cResp = await fetch(`https://sandbox.asaas.com/api/v3/customers/${paymentPayload.customer}`, {
-        headers: { 'access_token': process.env.ASAAS_API_KEY }
-      });
-      if (cResp.ok) {
-        const cData = await cResp.json();
-        aluno = appData.students?.find(s => s.cpf === cData.cpfCnpj);
-      }
+      // Find student using Asaas customer ID directly from school_data JSON
+      aluno = appData.students?.find(s => s.asaasCustomerId === paymentPayload.customer);
       fallbackValor = paymentPayload.value;
       fallbackVencimento = paymentPayload.dueDate;
       if (paymentPayload.description) fallbackDescricao = paymentPayload.description;
