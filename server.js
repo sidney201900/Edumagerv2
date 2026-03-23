@@ -83,10 +83,20 @@ function formatCobrancaDate(dateStr) {
 }
 
 // Integarção WhatsApp Evolution API
-async function sendEvolutionMessage(asaasPaymentId, eventType) {
+async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = null) {
   try {
-    const { data: cob } = await supabase.from('alunos_cobrancas').select('*').eq('asaas_payment_id', asaasPaymentId).single();
-    if (!cob) return console.log(`[Evolution] Cobrança não encontrada: ${asaasPaymentId}`);
+    let cob = null;
+    let fallbackValor = 0;
+    let fallbackVencimento = '';
+    let fallbackDescricao = 'serviços educacionais';
+
+    if (eventType !== 'PAYMENT_DELETED') {
+      const { data } = await supabase.from('alunos_cobrancas').select('*').eq('asaas_payment_id', asaasPaymentId).single();
+      cob = data;
+      if (!cob) return console.log(`[Evolution] Cobrança não encontrada: ${asaasPaymentId}`);
+      fallbackValor = cob.valor;
+      fallbackVencimento = cob.vencimento;
+    }
 
     const { data: schoolDataObj } = await supabase.from('school_data').select('data').eq('id', 1).single();
     if (!schoolDataObj || !schoolDataObj.data) {
@@ -105,7 +115,24 @@ async function sendEvolutionMessage(asaasPaymentId, eventType) {
 
     console.log('[WhatsApp] Configurações encontradas');
 
-    const aluno = appData.students?.find(s => s.id === cob.aluno_id);
+    let aluno = null;
+
+    if (eventType === 'PAYMENT_DELETED' && paymentPayload) {
+      // Find student using Asaas customer CPF
+      const cResp = await fetch(`https://sandbox.asaas.com/api/v3/customers/${paymentPayload.customer}`, {
+        headers: { 'access_token': process.env.ASAAS_API_KEY }
+      });
+      if (cResp.ok) {
+        const cData = await cResp.json();
+        aluno = appData.students?.find(s => s.cpf === cData.cpfCnpj);
+      }
+      fallbackValor = paymentPayload.value;
+      fallbackVencimento = paymentPayload.dueDate;
+      if (paymentPayload.description) fallbackDescricao = paymentPayload.description;
+    } else if (cob) {
+      aluno = appData.students?.find(s => s.id === cob.aluno_id);
+    }
+
     if (!aluno) return console.log(`[WhatsApp] Aluno não encontrado localmente para a cobrança.`);
     
     let destinationNumber = '';
@@ -133,37 +160,39 @@ async function sendEvolutionMessage(asaasPaymentId, eventType) {
     console.log('[WhatsApp] Destinatário definido:', targetName, cleanPhone);
 
     // Buscar no Asaas os detalhes recentes (description e URL do PDF)
-    const pResp = await fetch(`https://sandbox.asaas.com/api/v3/payments/${asaasPaymentId}`, { 
-      headers: { 'access_token': process.env.ASAAS_API_KEY } 
-    });
-    
-    let descricao = 'serviços educacionais';
-    let pdfUrl = cob.link_carne || cob.link_boleto || '';
+    let descricao = fallbackDescricao;
+    let pdfUrl = cob ? (cob.link_carne || cob.link_boleto || '') : '';
     let isCarneCompleto = false;
 
-    if (pResp.ok) {
-      const pData = await pResp.json();
-      if (pData.description) {
-        descricao = pData.description;
+    if (eventType !== 'PAYMENT_DELETED') {
+      const pResp = await fetch(`https://sandbox.asaas.com/api/v3/payments/${asaasPaymentId}`, { 
+        headers: { 'access_token': process.env.ASAAS_API_KEY } 
+      });
+      
+      if (pResp.ok) {
+        const pData = await pResp.json();
+        if (pData.description) {
+          descricao = pData.description;
+        }
         if (descricao.includes('Parcela')) {
           descricao = descricao.replace(' de ', ' a ');
         }
-      }
 
-      // 1. Identificar se é Carnê e evitar Spam
-      if (pData.installment && eventType === 'PAYMENT_CREATED') {
-        if (pData.installmentNumber > 1) {
-          console.log(`[WhatsApp] Ignorando envio da parcela ${pData.installmentNumber} para não spammar o aluno com o carnê repetido.`);
-          return;
+        // 1. Identificar se é Carnê e evitar Spam
+        if (pData.installment && eventType === 'PAYMENT_CREATED') {
+          if (pData.installmentNumber > 1) {
+            console.log(`[WhatsApp] Ignorando envio da parcela ${pData.installmentNumber} para não spammar o aluno com o carnê repetido.`);
+            return;
+          }
+          
+          // É a primeira parcela do carnê
+          isCarneCompleto = true;
+          // 2. Apontar pdfUrl para a rota de carnês completo do Asaas
+          pdfUrl = `https://sandbox.asaas.com/api/v3/installments/${pData.installment}/paymentBook`;
+        } else {
+          // 3. Manter o fluxo para cobranças avulsas
+          pdfUrl = pData.transactionReceiptUrl || pData.bankSlipUrl || pData.invoiceUrl || pdfUrl;
         }
-        
-        // É a primeira parcela do carnê
-        isCarneCompleto = true;
-        // 2. Apontar pdfUrl para a rota de carnês completo do Asaas
-        pdfUrl = `https://sandbox.asaas.com/api/v3/installments/${pData.installment}/paymentBook`;
-      } else {
-        // 3. Manter o fluxo para cobranças avulsas
-        pdfUrl = pData.transactionReceiptUrl || pData.bankSlipUrl || pData.invoiceUrl || pdfUrl;
       }
     }
 
@@ -186,8 +215,8 @@ async function sendEvolutionMessage(asaasPaymentId, eventType) {
     let msgFinal = templateText
       .replace(/{nome}/g, targetName)
       .replace(/{nome_aluno}/g, aluno.name)
-      .replace(/{valor}/g, parseFloat(cob.valor).toFixed(2).replace('.', ','))
-      .replace(/{vencimento}/g, formatCobrancaDate(cob.vencimento))
+      .replace(/{valor}/g, parseFloat(fallbackValor).toFixed(2).replace('.', ','))
+      .replace(/{vencimento}/g, formatCobrancaDate(fallbackVencimento))
       .replace(/{link_boleto}/g, pdfUrl)
       .replace(/{descricao}/g, descricao);
 
@@ -305,7 +334,7 @@ app.post('/api/webhook_asaas', async (req, res) => {
         break;
       case 'PAYMENT_DELETED':
         updateData = { status: 'CANCELADO' };
-        sendEvolutionMessage(asaasPaymentId, 'PAYMENT_DELETED');
+        sendEvolutionMessage(asaasPaymentId, 'PAYMENT_DELETED', payload.payment);
         break;
       case 'PAYMENT_UPDATED':
         updateData = { valor: payload.payment.value, vencimento: payload.payment.dueDate, status: payload.payment.status === 'RECEIVED' ? 'PAGO' : undefined };
