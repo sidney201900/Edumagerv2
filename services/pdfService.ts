@@ -264,47 +264,6 @@ const drawJustifiedText = async (doc: any, text: string, x: number, y: number, m
 };
 
 /**
- * Helper to add a compact, centered header specifically for the contract
- */
-const addContractHeader = async (doc: any, schoolData: SchoolData) => {
-  const profile = schoolData.profile;
-  const margin = 20; // 2cm sides
-  const pageWidth = doc.internal.pageSize.width;
-  const centerX = pageWidth / 2;
-
-  let currentY = 15; // 1.5cm top for header content
-
-  if (schoolData.logo) {
-    // Center the logo, making it small (20x20)
-    await addImageProportional(doc, schoolData.logo, centerX - 10, currentY, 20, 20);
-    currentY += 22;
-  }
-
-  doc.setFontSize(11);
-  doc.setTextColor(0);
-  doc.setFont('helvetica', 'bold');
-  doc.text(profile.name || 'Microtec Informática Cursos', centerX, currentY, { align: 'center' });
-
-  currentY += 5;
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-
-  const infoLine1 = `CNPJ: ${profile.cnpj || 'Não informado'} | ${profile.address || ''}`;
-  doc.text(infoLine1, centerX, currentY, { align: 'center' });
-
-  currentY += 4;
-  const infoLine2 = `${profile.phone || ''} ${profile.email ? '| ' + profile.email : ''}`;
-  doc.text(infoLine2, centerX, currentY, { align: 'center' });
-
-  currentY += 6;
-  doc.setDrawColor(0);
-  doc.setLineWidth(0.5);
-  doc.line(margin, currentY, pageWidth - margin, currentY);
-
-  return currentY + 10; // Return Y position for the next content
-};
-
-/**
  * Helper to draw justified text specifically for the contract
  */
 const drawContractText = async (doc: any, text: string, x: number, y: number, maxWidth: number, lineHeight: number, schoolData: SchoolData) => {
@@ -314,39 +273,8 @@ const drawContractText = async (doc: any, text: string, x: number, y: number, ma
     .replace(/terar/g, 'terá')
     .replace(/apredisagem/g, 'aprendizagem');
 
-  // Split by \n, then merge lines that belong to the same paragraph
-  let rawLines = cleanText.split('\n');
-  let paragraphs: string[] = [];
-  let currentParagraph = "";
-
-  for (let line of rawLines) {
-    let trimmed = line.trim();
-    if (!trimmed) {
-      if (currentParagraph) {
-        paragraphs.push(currentParagraph);
-        currentParagraph = "";
-      }
-      continue;
-    }
-
-    // If line starts with CLÁUSULA, it's a new paragraph
-    if (/^(CLÁUSULA|CLAUSULA)\s+\d+/i.test(trimmed)) {
-      if (currentParagraph) {
-        paragraphs.push(currentParagraph);
-      }
-      currentParagraph = trimmed;
-    } else {
-      // Append to current paragraph with a space
-      if (currentParagraph) {
-        currentParagraph += " " + trimmed;
-      } else {
-        currentParagraph = trimmed;
-      }
-    }
-  }
-  if (currentParagraph) {
-    paragraphs.push(currentParagraph);
-  }
+  // Preserve the exact organization by splitting strictly by newline
+  let paragraphs = cleanText.split('\n');
 
   let currentY = y;
   const margin = x;
@@ -355,29 +283,34 @@ const drawContractText = async (doc: any, text: string, x: number, y: number, ma
   const fontSize = 11; // Uniform font size for the body
 
   for (const p of paragraphs) {
-    const isClause = /^(CLÁUSULA|CLAUSULA)/i.test(p);
+    if (!p.trim()) {
+      currentY += lineHeight * 0.5; // Provide spacing for empty lines
+      continue;
+    }
+
+    const isClause = /^(CLÁUSULA|CLAUSULA)/i.test(p.trim());
 
     if (currentY > pageHeight - bottomMargin - 10) {
       doc.addPage();
-      currentY = await addContractHeader(doc, schoolData);
+      currentY = await addHeader(doc, schoolData);
     }
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(fontSize);
 
     let title = "";
-    let restOfText = p;
+    let restOfText = p.trim();
 
     if (isClause) {
-      const match = p.match(/^(CLÁUSULA\s+\d+.*?[-–—:]\s*|CLAUSULA\s+\d+.*?[-–—:]\s*)/i);
+      const match = restOfText.match(/^(CLÁUSULA\s+\d+.*?[-–—:]\s*|CLAUSULA\s+\d+.*?[-–—:]\s*)/i);
       if (match) {
         title = match[0];
-        restOfText = p.substring(title.length).trim();
+        restOfText = restOfText.substring(title.length).trim();
       } else {
-        const match2 = p.match(/^(CLÁUSULA\s+\d+|CLAUSULA\s+\d+)/i);
+        const match2 = restOfText.match(/^(CLÁUSULA\s+\d+|CLAUSULA\s+\d+)/i);
         if (match2) {
           title = match2[0] + " - ";
-          restOfText = p.substring(match2[0].length).trim();
+          restOfText = restOfText.substring(match2[0].length).trim();
         }
       }
     }
@@ -394,6 +327,11 @@ const drawContractText = async (doc: any, text: string, x: number, y: number, ma
       doc.text(title, startX, currentY);
       currentY += lineHeight;
       doc.setFont('helvetica', 'normal');
+    }
+
+    if (!restOfText) {
+      currentY += lineHeight * 0.5;
+      continue;
     }
 
     const lines = doc.splitTextToSize(restOfText, currentMaxWidth);
