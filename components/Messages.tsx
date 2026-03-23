@@ -12,6 +12,8 @@ const defaultTemplates = {
   boletoGerado: "Olá {nome}, sua cobrança referente a {descricao} no valor de R$ {valor} foi gerada. Vencimento: {vencimento}.",
   pagamentoConfirmado: "Olá {nome}, confirmamos o pagamento de R$ {valor} referente a {descricao}. Muito obrigado!",
   boletoVencido: "Olá {nome}, o boleto referente a {descricao} de R$ {valor} venceu em {vencimento}. Segue o PDF da 2ª via atualizada abaixo:",
+  cobrancaCancelada: "Olá {nome}, a cobrança referente a {descricao} foi cancelada.",
+  cobrancaAtualizada: "Olá {nome}, o boleto de {descricao} foi atualizado. Segue a nova versão:",
   automationRules: {
     sendOnDueDate: true,
     sendDaysAfter: '1',
@@ -28,6 +30,8 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
     boletoGerado: defaultVars.boletoGerado || defaultTemplates.boletoGerado,
     pagamentoConfirmado: defaultVars.pagamentoConfirmado || defaultTemplates.pagamentoConfirmado,
     boletoVencido: defaultVars.boletoVencido || defaultTemplates.boletoVencido,
+    cobrancaCancelada: defaultVars.cobrancaCancelada || defaultTemplates.cobrancaCancelada,
+    cobrancaAtualizada: defaultVars.cobrancaAtualizada || defaultTemplates.cobrancaAtualizada,
     automationRules: {
       sendOnDueDate: initRules.sendOnDueDate !== undefined ? initRules.sendOnDueDate : true,
       sendDaysAfter: initRules.sendDaysAfter || '1',
@@ -232,6 +236,43 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y text-slate-700 text-sm font-medium"
             />
           </div>
+
+          <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-xl">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-500">
+                <AlertTriangle size={20} />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800 text-lg">Cobrança Cancelada / Excluída</h3>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Enviado quando o boleto for cancelado no sistema</p>
+              </div>
+            </div>
+            <textarea 
+              value={templates.cobrancaCancelada}
+              onChange={(e) => setTemplates(p => ({ ...p, cobrancaCancelada: e.target.value }))}
+              rows={3}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y text-slate-700 text-sm font-medium"
+            />
+          </div>
+
+          <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-xl border-t-4 border-t-amber-400">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center text-amber-600">
+                <Settings size={20} />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800 text-lg">Cobrança Atualizada / Alterada</h3>
+                <p className="text-[11px] font-bold text-amber-500 uppercase tracking-widest">Enviado quando houver edição/atualização da cobrança</p>
+              </div>
+            </div>
+            <textarea 
+              value={templates.cobrancaAtualizada}
+              onChange={(e) => setTemplates(p => ({ ...p, cobrancaAtualizada: e.target.value }))}
+              rows={4}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 resize-y text-slate-700 text-sm font-medium"
+            />
+          </div>
+
         </div>
 
       </div>

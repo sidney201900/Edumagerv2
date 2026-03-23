@@ -143,7 +143,12 @@ async function sendEvolutionMessage(asaasPaymentId, eventType) {
 
     if (pResp.ok) {
       const pData = await pResp.json();
-      if (pData.description) descricao = pData.description;
+      if (pData.description) {
+        descricao = pData.description;
+        if (descricao.includes('Parcela')) {
+          descricao = descricao.replace(' de ', ' a ');
+        }
+      }
 
       // 1. Identificar se é Carnê e evitar Spam
       if (pData.installment && eventType === 'PAYMENT_CREATED') {
@@ -166,11 +171,15 @@ async function sendEvolutionMessage(asaasPaymentId, eventType) {
     const fbGerado = 'Olá {nome}, sua cobrança referente a {descricao} no valor de R$ {valor} foi gerada. Vencimento: {vencimento}.';
     const fbPago = 'Olá {nome}, confirmamos o pagamento de R$ {valor} referente a {descricao}. Muito obrigado!';
     const fbAtrasado = 'Olá {nome}, o boleto referente a {descricao} de R$ {valor} venceu em {vencimento}. Segue o PDF da 2ª via atualizada abaixo:';
+    const fbCancelado = 'Olá {nome}, a cobrança referente a {descricao} foi cancelada.';
+    const fbAtualizado = 'Olá {nome}, o boleto de {descricao} foi atualizado. Segue a nova versão:';
 
     let templateText = '';
     if (eventType === 'PAYMENT_CREATED') templateText = templates?.boletoGerado || fbGerado;
     else if (eventType === 'PAYMENT_RECEIVED' || eventType === 'PAYMENT_CONFIRMED') templateText = templates?.pagamentoConfirmado || fbPago;
     else if (eventType === 'PAYMENT_OVERDUE') templateText = templates?.boletoVencido || fbAtrasado;
+    else if (eventType === 'PAYMENT_DELETED') templateText = templates?.cobrancaCancelada || fbCancelado;
+    else if (eventType === 'PAYMENT_UPDATED') templateText = templates?.cobrancaAtualizada || fbAtualizado;
     
     if (!templateText) return;
 
@@ -182,9 +191,15 @@ async function sendEvolutionMessage(asaasPaymentId, eventType) {
       .replace(/{link_boleto}/g, pdfUrl)
       .replace(/{descricao}/g, descricao);
 
+    const isTextOnlyEvent = ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED', 'PAYMENT_DELETED'].includes(eventType);
+    if (['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED'].includes(eventType) && pdfUrl) {
+      // Anexa a URL do recibo ao final do texto para que não envie PDF quebrado
+      msgFinal += `\n\nComprovante: ${pdfUrl}`;
+    }
+
     // Download do PDF e Conversão para Base64
     let base64Pdf = null;
-    if (pdfUrl) {
+    if (pdfUrl && !isTextOnlyEvent) {
       try {
         console.log(`[WhatsApp] Tentando baixar PDF: ${pdfUrl}`);
         
@@ -216,13 +231,12 @@ async function sendEvolutionMessage(asaasPaymentId, eventType) {
 
     if (base64Pdf) {
       endpoint = 'sendMedia';
-      const isReceipt = eventType === 'PAYMENT_RECEIVED' || eventType === 'PAYMENT_CONFIRMED';
       payload = {
         number: cleanPhone,
         options: { delay: 1200, presence: "composing" },
         mediatype: "document",
         mimetype: "application/pdf",
-        fileName: isCarneCompleto ? "Carne_Microtec.pdf" : (isReceipt ? "Recibo_Microtec.pdf" : "Boleto_Microtec.pdf"),
+        fileName: isCarneCompleto ? "Carne_Microtec.pdf" : "Boleto_Microtec.pdf",
         media: base64Pdf,
         caption: msgFinal
       };
@@ -291,11 +305,13 @@ app.post('/api/webhook_asaas', async (req, res) => {
         break;
       case 'PAYMENT_DELETED':
         updateData = { status: 'CANCELADO' };
+        sendEvolutionMessage(asaasPaymentId, 'PAYMENT_DELETED');
         break;
       case 'PAYMENT_UPDATED':
         updateData = { valor: payload.payment.value, vencimento: payload.payment.dueDate, status: payload.payment.status === 'RECEIVED' ? 'PAGO' : undefined };
         // Remove undefined keys
         Object.keys(updateData).forEach(k => updateData[k] === undefined && delete updateData[k]);
+        sendEvolutionMessage(asaasPaymentId, 'PAYMENT_UPDATED');
         break;
       default:
         console.log(`Evento ignorado: ${payload.event}`);

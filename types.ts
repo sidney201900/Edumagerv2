@@ -233,6 +233,8 @@ export interface SchoolData {
     boletoGerado: string;
     pagamentoConfirmado: string;
     boletoVencido: string;
+    cobrancaCancelada?: string;
+    cobrancaAtualizada?: string;
     automationRules: {
       sendOnDueDate: boolean;
       sendDaysAfter: string;
