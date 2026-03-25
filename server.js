@@ -241,8 +241,7 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
     } else {
       payload = {
         number: cleanPhone,
-        options: { delay: 1200, presence: "composing" },
-        textMessage: { text: msgFinal }
+        text: msgFinal
       };
     }
 
@@ -338,19 +337,26 @@ app.post('/api/webhook_asaas', async (req, res) => {
                 let cleanPhone = targetPhone.replace(/\D/g, '');
                 if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
 
-                const msgFinal = `Olá ${targetName}, a cobrança de R$ ${Number(payload.payment.value || cob.valor).toFixed(2).replace('.', ',')} com vencimento para ${formatCobrancaDate(payload.payment.dueDate || cob.vencimento)} foi CANCELADA.`;
+                const msgFinal = `Olá ${targetName}, a cobrança de R$ ${Number(payload.payment.value || cob.valor).toFixed(2).replace('.', ',')} com vencimento para ${formatCobrancaDate(payload.payment.dueDate || cob.vencimento)} foi CANCELADA. Caso tenha dúvidas, entre em contato com a secretaria.`;
                 
                 const url = `${evoConfig.apiUrl.replace(/\/$/, '')}/message/sendText/${evoConfig.instanceName}`;
-                await fetch(url, {
+                console.log(`[Evolution] POST para ${cleanPhone} (PAYMENT_DELETED) usando sendText`);
+                
+                const evoResp = await fetch(url, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', 'apikey': evoConfig.apiKey },
                   body: JSON.stringify({
                     number: cleanPhone,
-                    options: { delay: 1200, presence: "composing" },
-                    textMessage: { text: msgFinal }
+                    text: msgFinal
                   })
                 });
-                console.log(`[WhatsApp Webhook] Cancelamento enviado para ${targetName} (${cleanPhone})`);
+                
+                if (evoResp.ok) {
+                  console.log(`[WhatsApp] ✅ Disparo de cancelamento enviado com sucesso para: ${cleanPhone}`);
+                } else {
+                  const errBody = await evoResp.text();
+                  console.error(`[WhatsApp] ❌ Erro ao enviar cancelamento pela Evolution API:`, evoResp.status, errBody);
+                }
               }
             }
           }
