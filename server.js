@@ -156,8 +156,13 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
       if (pData.description) {
         descricao = pData.description;
       }
-      if (descricao.includes('Parcela') && eventType === 'PAYMENT_CREATED') {
-        descricao = descricao.replace(' de ', ' a ');
+      if (descricao.includes('Parcela')) {
+        if (eventType === 'PAYMENT_CREATED') {
+          descricao = descricao.replace(' de ', ' a ');
+        } else if (['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED', 'PAYMENT_UPDATED'].includes(eventType)) {
+          // Garante 'de' em vez de 'a'
+          descricao = descricao.replace(/Parcela (\d+) a (\d+)/g, 'Parcela $1 de $2');
+        }
       }
 
       // 1. Identificar se é Carnê e evitar Spam
@@ -201,14 +206,12 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
       .replace(/{link_boleto}/g, pdfUrl)
       .replace(/{descricao}/g, descricao);
 
-    const isTextOnlyEvent = ['PAYMENT_DELETED'].includes(eventType);
-    
-    // Para recebimento, garantimos que se houver pdfUrl ele tente baixar
+    const isTextOnlyEvent = ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED', 'PAYMENT_DELETED'].includes(eventType);
     const isPaymentConfirmation = ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED'].includes(eventType);
     
+    // Se for confirmação de pagamento, adicionamos o link do recibo (HTML) ao texto, pois o PDF daria erro de download
     if (isPaymentConfirmation && pdfUrl) {
-      // Opcional: Log de depuração
-      console.log(`[WhatsApp] Comprovante detectado: ${pdfUrl}`);
+      msgFinal += `\n\n📄 Acesse seu comprovante aqui:\n${pdfUrl}`;
     }
 
     // Download do PDF e Conversão para Base64
