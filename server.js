@@ -244,11 +244,12 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
       payload = {
         number: cleanPhone,
         options: { delay: 1200, presence: "composing" },
-        mediatype: "document",
-        mimetype: "application/pdf",
-        fileName: isCarneCompleto ? "Carne_Microtec.pdf" : "Boleto_Microtec.pdf",
-        media: base64Pdf,
-        caption: msgFinal
+        mediaMessage: {
+          mediatype: "document",
+          fileName: isCarneCompleto ? "Carne_Microtec.pdf" : "Boleto_Microtec.pdf",
+          caption: msgFinal,
+          media: base64Pdf
+        }
       };
     } else {
       payload = {
