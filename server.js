@@ -555,6 +555,77 @@ app.post('/api/gerar_cobranca', async (req, res) => {
   }
 });
 
+// ===== DISPARO EM MASSA (ANTI-BAN) =====
+app.post('/api/enviar-massa', (req, res) => {
+  const { alunos, mensagem } = req.body;
+  
+  if (!alunos || !Array.isArray(alunos) || alunos.length === 0) {
+    return res.status(400).json({ error: 'Nenhum aluno válido selecionado.' });
+  }
+
+  // Responde imediatamente para não prender o Front-end
+  res.status(200).json({ success: true, message: 'Processamento em background iniciado com sucesso.' });
+
+  // Roda livre no backend
+  processarFilaWhatsApp(alunos, mensagem);
+});
+
+async function processarFilaWhatsApp(alunos, mensagemTemplate) {
+  console.log(`[WhatsApp em Massa] Iniciando fila para ${alunos.length} contatos...`);
+  
+  const { data: schoolDataObj } = await supabase.from('school_data').select('data').eq('id', 1).single();
+  if (!schoolDataObj?.data) {
+    return console.log('[WhatsApp em Massa] Erro: Configurações não encontradas.');
+  }
+
+  const evoConfig = schoolDataObj.data.evolutionConfig;
+  if (!evoConfig?.apiUrl || !evoConfig?.apiKey || !evoConfig?.instanceName) {
+    return console.log('[WhatsApp em Massa] Credenciais Evolution não configuradas.');
+  }
+  
+  for (let i = 0; i < alunos.length; i++) {
+    const aluno = alunos[i];
+    const mensagemPersonalizada = mensagemTemplate.replace(/{nome}/g, aluno.nome);
+    
+    try {
+      let cleanPhone = aluno.telefone.replace(/\D/g, '');
+      if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
+
+      const payload = {
+        number: cleanPhone,
+        options: { delay: 1200, presence: "composing" },
+        textMessage: { text: mensagemPersonalizada }
+      };
+
+      const url = `${evoConfig.apiUrl.replace(/\/$/, '')}/message/sendText/${evoConfig.instanceName}`;
+      
+      const sendResp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': evoConfig.apiKey },
+        body: JSON.stringify(payload)
+      });
+      
+      if (sendResp.ok) {
+        console.log(`[WhatsApp em Massa] (${i+1}/${alunos.length}) Enviado para ${aluno.nome} (${cleanPhone})`);
+      } else {
+        const errText = await sendResp.text();
+        console.error(`[WhatsApp em Massa] (${i+1}/${alunos.length}) Erro Evolution API para ${aluno.nome}:`, sendResp.status, errText);
+      }
+    } catch (error) {
+      console.error(`[WhatsApp em Massa] Erro Exceção ao enviar para ${aluno.nome}:`, error.message);
+    }
+
+    // Aplica o Delay Anti-Ban se NÃO for o último da fila
+    if (i < alunos.length - 1) {
+      // 1 a 3 minutos aleatoriamente (modificável)
+      const delayMs = Math.floor(Math.random() * (180000 - 60000 + 1)) + 60000;
+      console.log(`[WhatsApp em Massa] Aguardando ${(delayMs / 1000).toFixed(0)} segundos por segurança Anti-Ban...`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+  console.log('[WhatsApp em Massa] Fila processada/concluída com sucesso!');
+}
+
 const apiLogs = [];
 function addLog(service, action, details) { 
   apiLogs.unshift({ date: new Date().toISOString(), service, action, details }); 

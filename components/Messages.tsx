@@ -41,6 +41,12 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
 
   const [isSending, setIsSending] = useState(false);
 
+  // Estados WhatsApp em Massa
+  const [targetType, setTargetType] = useState('todos');
+  const [targetId, setTargetId] = useState('');
+  const [messageText, setMessageText] = useState('');
+  const [isSendingMass, setIsSendingMass] = useState(false);
+
   const handleSave = () => {
     updateData({ messageTemplates: templates });
     showAlert('Sucesso', 'Configurações de mensagens salvas com sucesso!', 'success');
@@ -67,6 +73,66 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
         }
       }
     );
+  };
+
+  const handleMassSend = async () => {
+    if (!messageText.trim()) {
+      return showAlert('Aviso', 'Digite uma mensagem para enviar.', 'warning');
+    }
+
+    let targetStudents = [];
+    if (targetType === 'todos') {
+      targetStudents = data.students || [];
+    } else if (targetType === 'turma') {
+      if (!targetId) return showAlert('Aviso', 'Selecione uma turma.', 'warning');
+      targetStudents = (data.students || []).filter(s => s.classId === targetId);
+    } else if (targetType === 'aluno') {
+      if (!targetId) return showAlert('Aviso', 'Selecione um aluno.', 'warning');
+      targetStudents = (data.students || []).filter(s => s.id === targetId);
+    }
+
+    const validStudents = targetStudents.filter(a => a.phone || a.guardianPhone);
+    if (validStudents.length === 0) {
+      return showAlert('Erro', 'Nenhum aluno com telefone cadastrado foi selecionado.', 'error');
+    }
+
+    const payloadAlunos = validStudents.map(a => {
+      let nome = a.name;
+      let telefone = a.phone;
+      
+      if (a.birthDate) {
+        const birthDate = new Date(a.birthDate);
+        const age = Math.abs(new Date(Date.now() - birthDate.getTime()).getUTCFullYear() - 1970);
+        if (age < 18) {
+          nome = a.guardianName || a.name;
+          telefone = a.guardianPhone || a.phone;
+        }
+      }
+
+      return { nome, telefone };
+    });
+
+    setIsSendingMass(true);
+    try {
+      const resp = await fetch('/api/enviar-massa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alunos: payloadAlunos, mensagem: messageText })
+      });
+      const resData = await resp.json();
+      
+      if (resp.ok) {
+        setMessageText('');
+        setTargetId('');
+        showAlert('Sucesso', 'Disparo iniciado no servidor! Você já pode fechar esta tela ou continuar usando o sistema.', 'success');
+      } else {
+        showAlert('Erro', resData.error || 'Erro ao iniciar disparo.', 'error');
+      }
+    } catch (e) {
+      showAlert('Erro', 'Erro de conexão.', 'error');
+    } finally {
+      setIsSendingMass(false);
+    }
   };
 
   return (
@@ -178,6 +244,86 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
             {!data.evolutionConfig?.apiUrl && (
               <p className="mt-3 text-xs text-amber-700 text-center font-medium">Configure a Evolution API nas Configurações.</p>
             )}
+          </div>
+
+          <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-xl shadow-lg mt-8">
+            <h3 className="font-black text-emerald-800 flex items-center gap-2 mb-3">
+              <MessageSquare size={20} /> Disparo em Massa (Anti-Ban)
+            </h3>
+            <p className="text-sm text-emerald-700/80 mb-5 leading-relaxed">
+              Dispare mensagens personalizadas sem risco de bloqueio. O sistema enviará em segundo plano com pausas de 1 a 3 minutos entre envios.
+            </p>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-emerald-700 uppercase mb-2">Público-Alvo</label>
+                <select 
+                  className="w-full px-3 py-2 border border-emerald-200 rounded-lg text-sm bg-white focus:ring-emerald-500"
+                  value={targetType}
+                  onChange={(e) => { setTargetType(e.target.value); setTargetId(''); }}
+                >
+                  <option value="todos">Todos os Alunos</option>
+                  <option value="turma">Uma Turma Específica</option>
+                  <option value="aluno">Um Aluno Específico</option>
+                </select>
+              </div>
+
+              {targetType === 'turma' && (
+                <div>
+                  <label className="block text-xs font-bold text-emerald-700 uppercase mb-2">Selecione a Turma</label>
+                  <select 
+                    className="w-full px-3 py-2 border border-emerald-200 rounded-lg text-sm bg-white"
+                    value={targetId}
+                    onChange={(e) => setTargetId(e.target.value)}
+                  >
+                    <option value="">-- Escolha a Turma --</option>
+                    {data.classes?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {targetType === 'aluno' && (
+                <div>
+                  <label className="block text-xs font-bold text-emerald-700 uppercase mb-2">Selecione o Aluno</label>
+                  <select 
+                    className="w-full px-3 py-2 border border-emerald-200 rounded-lg text-sm bg-white"
+                    value={targetId}
+                    onChange={(e) => setTargetId(e.target.value)}
+                  >
+                    <option value="">-- Escolha o Aluno --</option>
+                    {data.students?.map(s => <option key={s.id} value={s.id}>{s.name} ({s.cpf})</option>)}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-emerald-700 uppercase mb-2">Mensagem</label>
+                <textarea 
+                  rows={4}
+                  className="w-full px-3 py-2 border border-emerald-200 rounded-lg text-sm bg-white focus:ring-emerald-500"
+                  placeholder="Escreva sua mensagem aqui..."
+                  value={messageText}
+                  onChange={(e) => setMessageText(e.target.value)}
+                />
+                <p className="text-[11px] text-emerald-600 font-medium mt-1">Dica: Use {"{nome}"} para personalizar a mensagem com o nome de cada destinatário.</p>
+              </div>
+
+              <button 
+                onClick={handleMassSend}
+                disabled={isSendingMass || !data.evolutionConfig?.apiUrl}
+                className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm text-white shadow-md transition-all ${
+                  isSendingMass || !data.evolutionConfig?.apiUrl
+                  ? 'bg-slate-400 cursor-not-allowed'
+                  : 'bg-emerald-600 hover:bg-emerald-700 hover:scale-[1.02]'
+                }`}
+              >
+                {isSendingMass ? (
+                  <><div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" /> Iniciando...</>
+                ) : (
+                  <><Send size={18} /> Iniciar Disparo</>
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
