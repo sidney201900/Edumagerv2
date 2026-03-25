@@ -31,6 +31,8 @@ app.use(cors());
     console.warn('Supabase credentials not found. Some API routes may fail.');
   }
 
+const cancelCache = new Set();
+
 const upload = multer({ storage: multer.memoryStorage() });
 
 // Rota para upload e compressão da logo
@@ -314,7 +316,23 @@ app.post('/api/webhook_asaas', async (req, res) => {
         break;
       case 'PAYMENT_DELETED':
       case 'PAYMENT_CANCELED':
-        // 2. Correção do Cancelamento (Regra Explicada e Isolada)
+        // 1. Escudo Anti-Spam no Cancelamento (Webhook)
+        const paymentDataPayload = payload.payment;
+        const installmentId = paymentDataPayload.installment;
+
+        if (installmentId) {
+          if (cancelCache.has(installmentId)) {
+            console.log(`[WhatsApp Webhook] Ignorando spam de cancelamento para a parcela do carnê ${installmentId}`);
+            // Apenas deleta do Supabase silenciosamente e encerra
+            await supabase.from('alunos_cobrancas').delete().eq('asaas_payment_id', asaasPaymentId);
+            return res.status(200).send('OK');
+          } else {
+            // Adiciona ao cache e limpa após 1 minuto
+            cancelCache.add(installmentId);
+            setTimeout(() => cancelCache.delete(installmentId), 60000);
+          }
+        }
+
         try {
           const { data: cob } = await supabase.from('alunos_cobrancas').select('*').eq('asaas_payment_id', asaasPaymentId).single();
           if (cob) {
@@ -337,7 +355,12 @@ app.post('/api/webhook_asaas', async (req, res) => {
                 let cleanPhone = targetPhone.replace(/\D/g, '');
                 if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
 
-                const msgFinal = `Olá ${targetName}, a cobrança de R$ ${Number(payload.payment.value || cob.valor).toFixed(2).replace('.', ',')} com vencimento para ${formatCobrancaDate(payload.payment.dueDate || cob.vencimento)} foi CANCELADA. Caso tenha dúvidas, entre em contato com a secretaria.`;
+                const valor = Number(payload.payment.value || cob.valor);
+                const vencimentoFormatado = formatCobrancaDate(payload.payment.dueDate || cob.vencimento);
+
+                const mensagemCancelamento = installmentId 
+                  ? `Olá ${targetName}, informamos que o seu CARNÊ / PARCELAMENTO foi CANCELADO em nosso sistema. Todas as parcelas vinculadas a ele foram baixadas. Caso tenha dúvidas, entre em contato com a secretaria.`
+                  : `Olá ${targetName}, a cobrança de R$ ${valor.toFixed(2).replace('.', ',')} com vencimento original para ${vencimentoFormatado} foi CANCELADA. Caso tenha dúvidas, entre em contato com a secretaria.`;
                 
                 const url = `${evoConfig.apiUrl.replace(/\/$/, '')}/message/sendText/${evoConfig.instanceName}`;
                 console.log(`[Evolution] POST para ${cleanPhone} (PAYMENT_DELETED) usando sendText`);
@@ -347,7 +370,7 @@ app.post('/api/webhook_asaas', async (req, res) => {
                   headers: { 'Content-Type': 'application/json', 'apikey': evoConfig.apiKey },
                   body: JSON.stringify({
                     number: cleanPhone,
-                    text: msgFinal
+                    text: mensagemCancelamento
                   })
                 });
                 
@@ -643,8 +666,7 @@ async function processarFilaWhatsApp(alunos, mensagemTemplate) {
 
       const payload = {
         number: cleanPhone,
-        options: { delay: 1200, presence: "composing" },
-        textMessage: { text: mensagemPersonalizada }
+        text: mensagemPersonalizada
       };
 
       const url = `${evoConfig.apiUrl.replace(/\/$/, '')}/message/sendText/${evoConfig.instanceName}`;
