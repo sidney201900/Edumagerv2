@@ -467,25 +467,30 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
     try {
       const isoDueDate = newPayments[0].dueDate;
 
-      // Cálculo preciso de idade
-      let isMinor = false;
-      if (student.birthDate) {
-        const birthDate = new Date(student.birthDate);
+      // Cálculo preciso de idade — Bloqueio de bugs de fuso horário
+      const birthDateStr = student.birthDate || student.data_nascimento || '';
+      let age = 18; // Padrão: Maior de idade se não tiver data
+
+      if (birthDateStr && birthDateStr.includes('-')) {
+        const [year, month, day] = birthDateStr.split('-').map(Number);
+        const birthDate = new Date(year, month - 1, day);
         const today = new Date();
-        let age = today.getFullYear() - birthDate.getFullYear();
+        age = today.getFullYear() - birthDate.getFullYear();
         const m = today.getMonth() - birthDate.getMonth();
         if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
             age--;
         }
-        isMinor = age < 18;
       }
 
-      // Definição dos dados que irão para o Asaas
-      const finalName = (isMinor && student.guardianName) ? student.guardianName : student.name;
+      const isMinor = age < 18;
+
+      // Fallback robusto: Se for menor, mas não tiver dados do responsável, envia para o aluno mesmo assim para não quebrar.
+      const finalName = (isMinor && student.guardianName && student.guardianName.trim() !== '') ? student.guardianName : student.name;
+      const finalPhone = (isMinor && student.guardianPhone && student.guardianPhone.trim() !== '') ? student.guardianPhone : student.phone;
+
       const rawCpf = (student.cpf || '').replace(/\D/g, '');
       const rawGuardianCpf = (student.guardianCpf || '').replace(/\D/g, '');
       const finalCpf = (isMinor && rawGuardianCpf) ? rawGuardianCpf : rawCpf;
-      const finalPhone = (isMinor && student.guardianPhone) ? student.guardianPhone : student.phone;
 
       const originalDesc = formData.description || 'Mensalidade';
       const finalDescription = isMinor ? `${originalDesc} - Aluno: ${student.name}` : originalDesc;

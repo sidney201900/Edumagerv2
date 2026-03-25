@@ -163,10 +163,10 @@ const Students: React.FC<StudentsProps> = ({ data, updateData }) => {
   };
 
   const calculateAge = (dateString: string) => {
-    if (!dateString) return null;
+    if (!dateString || !dateString.includes('-')) return null;
+    const [year, month, day] = dateString.split('-').map(Number);
+    const birthDate = new Date(year, month - 1, day);
     const today = new Date();
-    const birthDate = new Date(dateString);
-    if (isNaN(birthDate.getTime())) return null;
     
     let age = today.getFullYear() - birthDate.getFullYear();
     const m = today.getMonth() - birthDate.getMonth();

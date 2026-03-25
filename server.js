@@ -114,11 +114,21 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
     const aluno = appData.students?.find(s => s.id === cob.aluno_id);
     if (!aluno) return console.log(`[WhatsApp] Aluno não encontrado localmente para a cobrança.`);
     
-    const birthDate = new Date(aluno.data_nascimento || aluno.birthDate);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+    const birthDateStr = aluno.data_nascimento || aluno.birthDate || '';
+    let age = 18;
+
+    if (birthDateStr && birthDateStr.includes('-')) {
+      const parts = birthDateStr.split('T')[0].split('-'); 
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10);
+      const day = parseInt(parts[2], 10);
+      
+      const birthDate = new Date(year, month - 1, day);
+      const today = new Date();
+      age = today.getFullYear() - birthDate.getFullYear();
+      const m = today.getMonth() - birthDate.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+    }
     
     const isMinor = age < 18;
     const targetPhone = (isMinor && (aluno.telefone_responsavel || aluno.guardianPhone)) ? (aluno.telefone_responsavel || aluno.guardianPhone) : (aluno.telefone || aluno.phone);
@@ -341,11 +351,21 @@ app.post('/api/webhook_asaas', async (req, res) => {
             const evoConfig = schoolDataObj?.data?.evolutionConfig;
             
             if (aluno && evoConfig && evoConfig.apiUrl) {
-              const birthDate = new Date(aluno.data_nascimento || aluno.birthDate);
-              const today = new Date();
-              let age = today.getFullYear() - birthDate.getFullYear();
-              const m = today.getMonth() - birthDate.getMonth();
-              if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+              const birthDateStr = aluno.data_nascimento || aluno.birthDate || '';
+              let age = 18;
+
+              if (birthDateStr && birthDateStr.includes('-')) {
+                const parts = birthDateStr.split('T')[0].split('-'); 
+                const year = parseInt(parts[0], 10);
+                const month = parseInt(parts[1], 10);
+                const day = parseInt(parts[2], 10);
+                
+                const birthDate = new Date(year, month - 1, day);
+                const today = new Date();
+                age = today.getFullYear() - birthDate.getFullYear();
+                const m = today.getMonth() - birthDate.getMonth();
+                if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+              }
               
               const isMinor = age < 18;
               const targetPhone = (isMinor && (aluno.telefone_responsavel || aluno.guardianPhone)) ? (aluno.telefone_responsavel || aluno.guardianPhone) : (aluno.telefone || aluno.phone);
