@@ -85,18 +85,12 @@ function formatCobrancaDate(dateStr) {
 // Integarção WhatsApp Evolution API
 async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = null) {
   try {
-    let cob = null;
-    let fallbackValor = 0;
-    let fallbackVencimento = '';
-    let fallbackDescricao = 'serviços educacionais';
-
-    if (eventType !== 'PAYMENT_DELETED') {
-      const { data } = await supabase.from('alunos_cobrancas').select('*').eq('asaas_payment_id', asaasPaymentId).single();
-      cob = data;
-      if (!cob) return console.log(`[Evolution] Cobrança não encontrada: ${asaasPaymentId}`);
-      fallbackValor = cob.valor;
-      fallbackVencimento = cob.vencimento;
-    }
+    const { data: cob } = await supabase.from('alunos_cobrancas').select('*').eq('asaas_payment_id', asaasPaymentId).single();
+    if (!cob) return console.log(`[Evolution] Cobrança não encontrada: ${asaasPaymentId}`);
+    
+    let fallbackValor = cob.valor;
+    let fallbackVencimento = cob.vencimento;
+    let fallbackDescricao = paymentPayload?.description || 'serviços educacionais';
 
     const { data: schoolDataObj } = await supabase.from('school_data').select('data').eq('id', 1).single();
     if (!schoolDataObj || !schoolDataObj.data) {
@@ -115,18 +109,7 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
 
     console.log('[WhatsApp] Configurações encontradas');
 
-    let aluno = null;
-
-    if (eventType === 'PAYMENT_DELETED' && paymentPayload) {
-      // Find student using Asaas customer ID directly from school_data JSON
-      aluno = appData.students?.find(s => s.asaasCustomerId === paymentPayload.customer);
-      fallbackValor = paymentPayload.value;
-      fallbackVencimento = paymentPayload.dueDate;
-      if (paymentPayload.description) fallbackDescricao = paymentPayload.description;
-    } else if (cob) {
-      aluno = appData.students?.find(s => s.id === cob.aluno_id);
-    }
-
+    const aluno = appData.students?.find(s => s.id === cob.aluno_id);
     if (!aluno) return console.log(`[WhatsApp] Aluno não encontrado localmente para a cobrança.`);
     
     let destinationNumber = '';
@@ -158,35 +141,33 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
     let pdfUrl = cob ? (cob.link_carne || cob.link_boleto || '') : '';
     let isCarneCompleto = false;
 
-    if (eventType !== 'PAYMENT_DELETED') {
-      const pResp = await fetch(`https://sandbox.asaas.com/api/v3/payments/${asaasPaymentId}`, { 
-        headers: { 'access_token': process.env.ASAAS_API_KEY } 
-      });
-      
-      if (pResp.ok) {
-        const pData = await pResp.json();
-        if (pData.description) {
-          descricao = pData.description;
-        }
-        if (descricao.includes('Parcela')) {
-          descricao = descricao.replace(' de ', ' a ');
-        }
+    const pResp = await fetch(`https://sandbox.asaas.com/api/v3/payments/${asaasPaymentId}`, { 
+      headers: { 'access_token': process.env.ASAAS_API_KEY } 
+    });
+    
+    if (pResp.ok) {
+      const pData = await pResp.json();
+      if (pData.description) {
+        descricao = pData.description;
+      }
+      if (descricao.includes('Parcela')) {
+        descricao = descricao.replace(' de ', ' a ');
+      }
 
-        // 1. Identificar se é Carnê e evitar Spam
-        if (pData.installment && eventType === 'PAYMENT_CREATED') {
-          if (pData.installmentNumber > 1) {
-            console.log(`[WhatsApp] Ignorando envio da parcela ${pData.installmentNumber} para não spammar o aluno com o carnê repetido.`);
-            return;
-          }
-          
-          // É a primeira parcela do carnê
-          isCarneCompleto = true;
-          // 2. Apontar pdfUrl para a rota de carnês completo do Asaas
-          pdfUrl = `https://sandbox.asaas.com/api/v3/installments/${pData.installment}/paymentBook`;
-        } else {
-          // 3. Manter o fluxo para cobranças avulsas
-          pdfUrl = pData.transactionReceiptUrl || pData.bankSlipUrl || pData.invoiceUrl || pdfUrl;
+      // 1. Identificar se é Carnê e evitar Spam
+      if (pData.installment && eventType === 'PAYMENT_CREATED') {
+        if (pData.installmentNumber > 1) {
+          console.log(`[WhatsApp] Ignorando envio da parcela ${pData.installmentNumber} para não spammar o aluno com o carnê repetido.`);
+          return;
         }
+        
+        // É a primeira parcela do carnê
+        isCarneCompleto = true;
+        // 2. Apontar pdfUrl para a rota de carnês completo do Asaas
+        pdfUrl = `https://sandbox.asaas.com/api/v3/installments/${pData.installment}/paymentBook`;
+      } else {
+        // 3. Manter o fluxo para cobranças avulsas
+        pdfUrl = pData.transactionReceiptUrl || pData.bankSlipUrl || pData.invoiceUrl || pdfUrl;
       }
     }
 
@@ -327,9 +308,16 @@ app.post('/api/webhook_asaas', async (req, res) => {
         sendEvolutionMessage(asaasPaymentId, 'PAYMENT_OVERDUE');
         break;
       case 'PAYMENT_DELETED':
-        updateData = { status: 'CANCELADO' };
-        sendEvolutionMessage(asaasPaymentId, 'PAYMENT_DELETED', payload.payment);
-        break;
+        // IMPORTANTE: Dispara a mensagem ANTES de apagar
+        await sendEvolutionMessage(asaasPaymentId, 'PAYMENT_DELETED', payload.payment);
+        
+        // Exclui no banco de dados local apos usar os dados
+        const { error: delWebhookErr } = await supabase.from('alunos_cobrancas').delete().eq('asaas_payment_id', asaasPaymentId);
+        if (delWebhookErr) {
+          console.error('Erro ao excluir do Supabase no webhook (PAYMENT_DELETED):', delWebhookErr);
+        }
+        addLog('Webhook', `Sucesso PAYMENT_DELETED`, { asaasPaymentId });
+        return res.status(200).json({ message: 'Webhook PAYMENT_DELETED processado e excluido localmente' });
       case 'PAYMENT_UPDATED':
         updateData = { valor: payload.payment.value, vencimento: payload.payment.dueDate, status: payload.payment.status === 'RECEIVED' ? 'PAGO' : undefined };
         // Remove undefined keys
@@ -665,19 +653,13 @@ app.post('/api/excluir_cobranca', async (req, res) => {
       }
     }
 
-    // ==== PASSO 2: SÓ APAGA DO BANCO SE ASAAS DEU OK ====
+    // ==== PASSO 2: APENAS REGISTRA LOG. EXCLUSÃO SERÁ FEITA VIA WEBHOOK ====
     if (parcelas && parcelas.length > 0) {
-      const idsToDelete = parcelas.map(p => p.id);
-      const { error: delErr } = await supabase.from('alunos_cobrancas').delete().in('id', idsToDelete);
-      if (delErr) {
-        addLog('Supabase', 'Exclusão DB', { error: delErr.message, ids: idsToDelete });
-        return res.status(500).json({ error: 'Exclusão do Asaas OK, mas falhou ao excluir do banco local.' });
-      }
-      addLog('Supabase', 'Exclusão DB OK', { count: idsToDelete.length });
+      addLog('Supabase', 'Exclusão DB ignorada (deixada para o Webhook)', { count: parcelas.length });
     }
     
-    console.log(`[Exclusão] Sucesso completo para ID: ${id}`);
-    return res.status(200).json({ message: 'Excluído com sucesso (Asaas e EduManager)' });
+    console.log(`[Exclusão] Sucesso completo para ID (Asaas excluído, DB pendente de Webhook): ${id}`);
+    return res.status(200).json({ message: 'Excluído no Asaas com sucesso (Aguardando Webhook)' });
   } catch (error) { 
     addLog('Server', 'Exclusão Erro Interno', error.message);
     console.error('[Exclusão] Erro interno:', error);
