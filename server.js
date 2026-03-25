@@ -112,26 +112,20 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
     const aluno = appData.students?.find(s => s.id === cob.aluno_id);
     if (!aluno) return console.log(`[WhatsApp] Aluno não encontrado localmente para a cobrança.`);
     
-    let destinationNumber = '';
-    let targetName = '';
+    const birthDate = new Date(aluno.data_nascimento || aluno.birthDate);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
     
-    const birthDate = new Date(aluno.birthDate);
-    const ageDifMs = Date.now() - birthDate.getTime();
-    const ageDate = new Date(ageDifMs);
-    const age = Math.abs(ageDate.getUTCFullYear() - 1970);
-    
-    if (age >= 18) {
-      destinationNumber = aluno.phone;
-      targetName = aluno.name;
-    } else {
-      destinationNumber = aluno.guardianPhone || aluno.phone;
-      targetName = aluno.guardianName || aluno.name;
-    }
-    
-    if (!destinationNumber) return console.log('[WhatsApp] Sem telefone para envio.');
+    const isMinor = age < 18;
+    const targetPhone = (isMinor && (aluno.telefone_responsavel || aluno.guardianPhone)) ? (aluno.telefone_responsavel || aluno.guardianPhone) : (aluno.telefone || aluno.phone);
+    const targetName = (isMinor && (aluno.nome_responsavel || aluno.guardianName)) ? (aluno.nome_responsavel || aluno.guardianName) : (aluno.nome || aluno.name);
+
+    if (!targetPhone) return console.log('[WhatsApp] Sem telefone para envio.');
 
     // Remove tudo que não é número e adiciona 55 se vier sem DDI
-    let cleanPhone = destinationNumber.replace(/\D/g, '');
+    let cleanPhone = targetPhone.replace(/\D/g, '');
     if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
 
     console.log('[WhatsApp] Destinatário definido:', targetName, cleanPhone);
@@ -286,6 +280,18 @@ app.post('/api/webhook_asaas', async (req, res) => {
 
   try {
     const payload = req.body;
+    
+    // 1. Bloqueio de Spam (Retentativas Antigas do Asaas)
+    if (payload.dateCreated) {
+      const eventDate = new Date(payload.dateCreated);
+      const now = new Date();
+      const diffHours = (now.getTime() - eventDate.getTime()) / (1000 * 60 * 60);
+      if (diffHours > 24) {
+        console.log('Webhook antigo ignorado');
+        return res.status(200).send('OK');
+      }
+    }
+
     const asaasPaymentId = payload.payment.id;
     let updateData = {};
 
@@ -308,16 +314,54 @@ app.post('/api/webhook_asaas', async (req, res) => {
         sendEvolutionMessage(asaasPaymentId, 'PAYMENT_OVERDUE');
         break;
       case 'PAYMENT_DELETED':
-        // IMPORTANTE: Dispara a mensagem ANTES de apagar
-        await sendEvolutionMessage(asaasPaymentId, 'PAYMENT_DELETED', payload.payment);
-        
-        // Exclui no banco de dados local apos usar os dados
-        const { error: delWebhookErr } = await supabase.from('alunos_cobrancas').delete().eq('asaas_payment_id', asaasPaymentId);
-        if (delWebhookErr) {
-          console.error('Erro ao excluir do Supabase no webhook (PAYMENT_DELETED):', delWebhookErr);
+      case 'PAYMENT_CANCELED':
+        // 2. Correção do Cancelamento (Regra Explicada e Isolada)
+        try {
+          const { data: cob } = await supabase.from('alunos_cobrancas').select('*').eq('asaas_payment_id', asaasPaymentId).single();
+          if (cob) {
+            const { data: schoolDataObj } = await supabase.from('school_data').select('data').eq('id', 1).single();
+            const aluno = schoolDataObj?.data?.students?.find(s => s.id === cob.aluno_id);
+            const evoConfig = schoolDataObj?.data?.evolutionConfig;
+            
+            if (aluno && evoConfig && evoConfig.apiUrl) {
+              const birthDate = new Date(aluno.data_nascimento || aluno.birthDate);
+              const today = new Date();
+              let age = today.getFullYear() - birthDate.getFullYear();
+              const m = today.getMonth() - birthDate.getMonth();
+              if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+              
+              const isMinor = age < 18;
+              const targetPhone = (isMinor && (aluno.telefone_responsavel || aluno.guardianPhone)) ? (aluno.telefone_responsavel || aluno.guardianPhone) : (aluno.telefone || aluno.phone);
+              const targetName = (isMinor && (aluno.nome_responsavel || aluno.guardianName)) ? (aluno.nome_responsavel || aluno.guardianName) : (aluno.nome || aluno.name);
+
+              if (targetPhone) {
+                let cleanPhone = targetPhone.replace(/\D/g, '');
+                if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
+
+                const msgFinal = `Olá ${targetName}, a cobrança de R$ ${Number(payload.payment.value || cob.valor).toFixed(2).replace('.', ',')} com vencimento para ${formatCobrancaDate(payload.payment.dueDate || cob.vencimento)} foi CANCELADA.`;
+                
+                const url = `${evoConfig.apiUrl.replace(/\/$/, '')}/message/sendText/${evoConfig.instanceName}`;
+                await fetch(url, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'apikey': evoConfig.apiKey },
+                  body: JSON.stringify({
+                    number: cleanPhone,
+                    options: { delay: 1200, presence: "composing" },
+                    textMessage: { text: msgFinal }
+                  })
+                });
+                console.log(`[WhatsApp Webhook] Cancelamento enviado para ${targetName} (${cleanPhone})`);
+              }
+            }
+          }
+        } catch (e) {
+          console.error('[WhatsApp Cancelamento] Erro:', e.message);
         }
+        
+        // Exclusão SOMENTE DEPOIS do envio explícito para a API
+        await supabase.from('alunos_cobrancas').delete().eq('asaas_payment_id', asaasPaymentId);
         addLog('Webhook', `Sucesso PAYMENT_DELETED`, { asaasPaymentId });
-        return res.status(200).json({ message: 'Webhook PAYMENT_DELETED processado e excluido localmente' });
+        return res.status(200).send('OK');
       case 'PAYMENT_UPDATED':
         updateData = { valor: payload.payment.value, vencimento: payload.payment.dueDate, status: payload.payment.status === 'RECEIVED' ? 'PAGO' : undefined };
         // Remove undefined keys
