@@ -246,7 +246,7 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
         options: { delay: 1200, presence: "composing" },
         mediatype: "document",
         mimetype: "application/pdf",
-        fileName: isCarneCompleto ? "Carne_Microtec.pdf" : "Boleto_Microtec.pdf",
+        fileName: isCarneCompleto ? `Carne-${targetName.replace(/\s+/g, '')}.pdf` : `Boleto-${targetName.replace(/\s+/g, '')}.pdf`,
         media: base64Pdf,
         caption: msgFinal
       };
