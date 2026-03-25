@@ -156,7 +156,7 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
       if (pData.description) {
         descricao = pData.description;
       }
-      if (descricao.includes('Parcela')) {
+      if (descricao.includes('Parcela') && eventType === 'PAYMENT_CREATED') {
         descricao = descricao.replace(' de ', ' a ');
       }
 
@@ -201,10 +201,14 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
       .replace(/{link_boleto}/g, pdfUrl)
       .replace(/{descricao}/g, descricao);
 
-    const isTextOnlyEvent = ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED', 'PAYMENT_DELETED'].includes(eventType);
-    if (['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED'].includes(eventType) && pdfUrl) {
-      // Anexa a URL do recibo ao final do texto para que não envie PDF quebrado
-      msgFinal += `\n\nComprovante: ${pdfUrl}`;
+    const isTextOnlyEvent = ['PAYMENT_DELETED'].includes(eventType);
+    
+    // Para recebimento, garantimos que se houver pdfUrl ele tente baixar
+    const isPaymentConfirmation = ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED'].includes(eventType);
+    
+    if (isPaymentConfirmation && pdfUrl) {
+      // Opcional: Log de depuração
+      console.log(`[WhatsApp] Comprovante detectado: ${pdfUrl}`);
     }
 
     // Download do PDF e Conversão para Base64
@@ -241,12 +245,16 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
 
     if (base64Pdf) {
       endpoint = 'sendMedia';
+      let fileName = `Boleto-${targetName.replace(/\s+/g, '')}.pdf`;
+      if (isCarneCompleto) fileName = `Carne-${targetName.replace(/\s+/g, '')}.pdf`;
+      if (isPaymentConfirmation) fileName = `Comprovante-${targetName.replace(/\s+/g, '')}.pdf`;
+
       payload = {
         number: cleanPhone,
         options: { delay: 1200, presence: "composing" },
         mediatype: "document",
         mimetype: "application/pdf",
-        fileName: isCarneCompleto ? `Carne-${targetName.replace(/\s+/g, '')}.pdf` : `Boleto-${targetName.replace(/\s+/g, '')}.pdf`,
+        fileName: fileName,
         media: base64Pdf,
         caption: msgFinal
       };
