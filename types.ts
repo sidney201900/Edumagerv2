@@ -49,6 +49,8 @@ export interface Student {
   discount?: number;
   hasGuardian?: boolean;
   contractTemplateId?: string; // Vínculo com o modelo de contrato
+  enrollmentNumber?: string; // Número de matrícula (login do portal do aluno)
+  portalPassword?: string; // Senha do portal do aluno (padrão: 6 primeiros dígitos do CPF)
 }
 
 export interface Class {

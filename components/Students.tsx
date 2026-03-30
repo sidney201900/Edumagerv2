@@ -665,9 +665,27 @@ const Students: React.FC<StudentsProps> = ({ data, updateData }) => {
     let newContracts = [...data.contracts];
     
     const studentId = editingStudent ? editingStudent.id : crypto.randomUUID();
+
+    // Gerar número de matrícula automático para novos alunos
+    let enrollmentNumber = formData.enrollmentNumber || editingStudent?.enrollmentNumber;
+    if (!enrollmentNumber) {
+      const year = new Date().getFullYear();
+      const existingCount = data.students.filter(s => s.enrollmentNumber?.startsWith(`MAT-${year}`)).length;
+      enrollmentNumber = `MAT-${year}${String(existingCount + 1).padStart(5, '0')}`;
+    }
+
+    // Gerar senha padrão do portal (6 primeiros dígitos do CPF)
+    let portalPassword = formData.portalPassword || editingStudent?.portalPassword;
+    if (!portalPassword) {
+      const rawCpfForPassword = (formData.cpf || '').replace(/\D/g, '');
+      portalPassword = rawCpfForPassword.substring(0, 6) || '123456';
+    }
+
     const studentToSave: Student = {
       ...(editingStudent || { id: studentId }),
-      ...formData as Student
+      ...formData as Student,
+      enrollmentNumber,
+      portalPassword
     };
 
     if (editingStudent) {
@@ -1380,6 +1398,35 @@ const Students: React.FC<StudentsProps> = ({ data, updateData }) => {
                           onChange={e => setFormData({...formData, email: e.target.value})} 
                           placeholder="email@exemplo.com"
                         />
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Portal do Aluno */}
+                  <section className="space-y-4">
+                    <h4 className="text-xs font-black text-indigo-600 uppercase tracking-widest border-b border-indigo-100 pb-2">🎓 Portal do Aluno</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nº Matrícula (Login)</label>
+                        <input
+                          type="text"
+                          className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-lg font-mono font-bold text-sm text-slate-700 cursor-not-allowed"
+                          value={formData.enrollmentNumber || editingStudent?.enrollmentNumber || 'Gerado automaticamente ao salvar'}
+                          readOnly
+                          title="O número de matrícula é gerado automaticamente"
+                        />
+                        <span className="text-[9px] text-slate-400 mt-0.5 block">Gerado automaticamente. Será o login do aluno no portal.</span>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Senha do Portal</label>
+                        <input
+                          type="text"
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all font-medium text-sm"
+                          value={formData.portalPassword || ''}
+                          onChange={e => setFormData({...formData, portalPassword: e.target.value})}
+                          placeholder={formData.cpf ? `Padrão: ${(formData.cpf || '').replace(/\D/g, '').substring(0, 6)}` : 'Será gerada ao salvar'}
+                        />
+                        <span className="text-[9px] text-slate-400 mt-0.5 block">Padrão: 6 primeiros dígitos do CPF. Pode ser alterada a qualquer momento.</span>
                       </div>
                     </div>
                   </section>
