@@ -13,6 +13,12 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// === ASAAS: URL base dinâmica (Sandbox ou Produção) ===
+// Para migrar para produção, basta alterar ASAAS_API_URL no Portainer
+// Sandbox: https://sandbox.asaas.com/api
+// Produção: https://api.asaas.com
+const ASAAS_BASE_URL = process.env.ASAAS_API_URL || 'https://sandbox.asaas.com/api';
+
 app.use(express.json());
 app.use(cors());
 
@@ -147,7 +153,7 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
     let pdfUrl = cob ? (cob.link_carne || cob.link_boleto || '') : '';
     let isCarneCompleto = false;
 
-    const pResp = await fetch(`https://sandbox.asaas.com/api/v3/payments/${asaasPaymentId}`, { 
+    const pResp = await fetch(`${ASAAS_BASE_URL}/v3/payments/${asaasPaymentId}`, { 
       headers: { 'access_token': process.env.ASAAS_API_KEY } 
     });
     
@@ -175,7 +181,7 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
         // É a primeira parcela do carnê
         isCarneCompleto = true;
         // 2. Apontar pdfUrl para a rota de carnês completo do Asaas
-        pdfUrl = `https://sandbox.asaas.com/api/v3/installments/${pData.installment}/paymentBook`;
+        pdfUrl = `${ASAAS_BASE_URL}/v3/installments/${pData.installment}/paymentBook`;
       } else {
         // 3. Manter o fluxo para cobranças avulsas
         pdfUrl = pData.transactionReceiptUrl || pData.bankSlipUrl || pData.invoiceUrl || pdfUrl;
@@ -491,7 +497,7 @@ app.post('/api/gerar_cobranca', async (req, res) => {
     let customerId = '';
     
     // Try to find customer by CPF first
-    const searchRes = await fetch(`https://sandbox.asaas.com/api/v3/customers?cpfCnpj=${cpf}`, {
+    const searchRes = await fetch(`${ASAAS_BASE_URL}/v3/customers?cpfCnpj=${cpf}`, {
       method: 'GET',
       headers: {
         'access_token': process.env.ASAAS_API_KEY
@@ -506,7 +512,7 @@ app.post('/api/gerar_cobranca', async (req, res) => {
     }
 
     if (!customerId) {
-      const customerRes = await fetch('https://sandbox.asaas.com/api/v3/customers', {
+      const customerRes = await fetch(`${ASAAS_BASE_URL}/v3/customers`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -565,7 +571,7 @@ app.post('/api/gerar_cobranca', async (req, res) => {
 
     console.log('Payload enviado para o Asaas:', asaasPayload);
 
-    const paymentRes = await fetch('https://sandbox.asaas.com/api/v3/payments', {
+    const paymentRes = await fetch(`${ASAAS_BASE_URL}/v3/payments`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -595,7 +601,7 @@ app.post('/api/gerar_cobranca', async (req, res) => {
       console.log('Detectado Parcelamento. ID do Carnê:', installmentId);
       
       // Buscar todas as cobranças geradas para este parcelamento no Asaas
-      const installmentsRes = await fetch(`https://sandbox.asaas.com/api/v3/payments?installment=${installmentId}`, {
+      const installmentsRes = await fetch(`${ASAAS_BASE_URL}/v3/payments?installment=${installmentId}`, {
         method: 'GET',
         headers: {
           'access_token': process.env.ASAAS_API_KEY
@@ -776,7 +782,7 @@ app.post('/api/excluir_cobranca', async (req, res) => {
     if (isInstallmentPackage) {
       const asaasTargetId = formatInstallmentId(id);
       console.log(`[Exclusão] Deletando parcelamento ${asaasTargetId} no Asaas...`);
-      const resp = await fetch(`https://sandbox.asaas.com/api/v3/installments/${asaasTargetId}`, { 
+      const resp = await fetch(`${ASAAS_BASE_URL}/v3/installments/${asaasTargetId}`, { 
         method: 'DELETE', 
         headers: { 'access_token': process.env.ASAAS_API_KEY } 
       });
@@ -789,7 +795,7 @@ app.post('/api/excluir_cobranca', async (req, res) => {
       }
     } else if (isSinglePayment) {
       console.log(`[Exclusão] Deletando pagamento ${id} no Asaas...`);
-      const resp = await fetch(`https://sandbox.asaas.com/api/v3/payments/${id}`, { 
+      const resp = await fetch(`${ASAAS_BASE_URL}/v3/payments/${id}`, { 
         method: 'DELETE', 
         headers: { 'access_token': process.env.ASAAS_API_KEY } 
       });
@@ -813,7 +819,7 @@ app.post('/api/excluir_cobranca', async (req, res) => {
       for (const instId of instIds) {
         if (instId === id) continue;
         const formattedLoopId = formatInstallmentId(instId);
-        const resp = await fetch(`https://sandbox.asaas.com/api/v3/installments/${formattedLoopId}`, { method: 'DELETE', headers: { 'access_token': process.env.ASAAS_API_KEY } });
+        const resp = await fetch(`${ASAAS_BASE_URL}/v3/installments/${formattedLoopId}`, { method: 'DELETE', headers: { 'access_token': process.env.ASAAS_API_KEY } });
         if (resp.ok) addLog('Asaas', 'Exclusão OK (Resolver DB)', { instId });
         else addLog('Asaas', 'Exclusão FALHOU (Resolver DB)', { instId });
       }
@@ -822,7 +828,7 @@ app.post('/api/excluir_cobranca', async (req, res) => {
         const belongsToInst = parcelas.find(p => p.asaas_payment_id === payId && instIds.has(p.asaas_installment_id));
         if (belongsToInst && instIds.size > 0) continue;
 
-        const resp = await fetch(`https://sandbox.asaas.com/api/v3/payments/${payId}`, { method: 'DELETE', headers: { 'access_token': process.env.ASAAS_API_KEY } });
+        const resp = await fetch(`${ASAAS_BASE_URL}/v3/payments/${payId}`, { method: 'DELETE', headers: { 'access_token': process.env.ASAAS_API_KEY } });
         if (resp.ok) addLog('Asaas', 'Exclusão Pay OK (Resolver DB)', { payId });
       }
     }
@@ -865,7 +871,7 @@ app.get('/api/parcelamentos/:id/carne', async (req, res) => {
     if (instId) {
       const asaasTargetInstId = formatInstallmentId(instId);
       console.log(`[Carnê] Buscando PDF do parcelamento ${asaasTargetInstId} no Asaas...`);
-      const baseUrl = process.env.ASAAS_API_URL || 'https://sandbox.asaas.com/api';
+      const baseUrl = ASAAS_BASE_URL;
       
       // 1. Verificar se o carnê já foi gerado e salvo no Supabase (se a coluna link_carne existir)
       const pSaved = parcelas?.find(x => x.link_carne);
@@ -927,7 +933,7 @@ app.get('/api/parcelamentos/:id/carne', async (req, res) => {
 
 app.get('/api/cobrancas/:id/link', async (req, res) => {
   try {
-    const p = await fetch(`https://sandbox.asaas.com/api/v3/payments/${req.params.id}`, { headers: { 'access_token': process.env.ASAAS_API_KEY } });
+    const p = await fetch(`${ASAAS_BASE_URL}/v3/payments/${req.params.id}`, { headers: { 'access_token': process.env.ASAAS_API_KEY } });
     if (!p.ok) return res.status(404).json({ error: 'Não encontrada.' });
     const d = await p.json();
     return res.status(200).json({ bankSlipUrl: d.bankSlipUrl || d.invoiceUrl, transactionReceiptUrl: d.transactionReceiptUrl });
@@ -949,7 +955,7 @@ app.put('/api/cobrancas/:id', async (req, res) => {
       if (data && data.asaas_payment_id) targetAsaasId = data.asaas_payment_id;
     }
 
-    const baseUrl = process.env.ASAAS_API_URL || 'https://sandbox.asaas.com/api';
+    const baseUrl = ASAAS_BASE_URL;
     const aResp = await fetch(`${baseUrl}/v3/payments/${targetAsaasId}`, {
       method: 'POST', 
       headers: { 'Content-Type': 'application/json', 'access_token': process.env.ASAAS_API_KEY },
@@ -990,7 +996,7 @@ app.get('/api/alunos/:id/carne', async (req, res) => {
     const latestInstId = cob[0].asaas_installment_id;
     const asaasTargetInstId = formatInstallmentId(latestInstId);
     
-    const ar = await fetch(`https://sandbox.asaas.com/api/v3/installments/${asaasTargetInstId}`, { headers: { 'access_token': process.env.ASAAS_API_KEY } });
+    const ar = await fetch(`${ASAAS_BASE_URL}/v3/installments/${asaasTargetInstId}`, { headers: { 'access_token': process.env.ASAAS_API_KEY } });
     if (ar.ok) {
       const data = await ar.json();
       if (data.paymentBookUrl) return res.status(200).json({ status: 'success', type: 'pdf', url: data.paymentBookUrl });
@@ -1076,7 +1082,7 @@ app.get('/api/imprimir-carne/:installmentId', async (req, res) => {
     }
 
     // 3. Fazer GET no Asaas solicitando o paymentBook diretamente via Stream/ArrayBuffer
-    const baseUrl = process.env.ASAAS_API_URL || 'https://sandbox.asaas.com/api';
+    const baseUrl = ASAAS_BASE_URL;
     let asaasUrl = `${baseUrl}/v3/installments/${asaasTargetInstId}/paymentBook`;
     
     const asaasParams = new URLSearchParams();
