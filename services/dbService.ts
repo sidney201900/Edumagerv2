@@ -33,6 +33,8 @@ const initialData: SchoolData = {
   handoutDeliveries: [],
   employees: [],
   employeeCategories: [],
+  lessons: [],
+  notifications: [],
   profile: {
     id: 'main-school',
     name: 'EduManager School',
