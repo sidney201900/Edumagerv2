@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SchoolData, Class, Lesson, Notification } from '../types';
 import { useDialog } from '../DialogContext';
-import { Calendar, Plus, X, AlertCircle, RefreshCw, Send, CheckCircle, Search } from 'lucide-react';
+import { Calendar, Plus, X, AlertCircle, RefreshCw, Send, CheckCircle, Search, Clock } from 'lucide-react';
 import { dbService } from '../services/dbService';
 
 interface LessonScheduleProps {
@@ -20,21 +20,40 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
   // Form states for generation
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  // Days of week (0=Sun, 1=Mon, ..., 6=Sat)
   const [dayOfWeek, setDayOfWeek] = useState('1'); 
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
 
   // Form states for cancellation
   const [cancelReason, setCancelReason] = useState('');
   const [wantReplacement, setWantReplacement] = useState(false);
   const [replacementDate, setReplacementDate] = useState('');
+  const [replacementStartTime, setReplacementStartTime] = useState('');
+  const [replacementEndTime, setReplacementEndTime] = useState('');
+
+  const checkCollision = (date: string, start: string, end: string, ignoreLessonId?: string) => {
+    return (data.lessons || []).find(l => {
+      // Ignore if it's the lesson being replaced (if any) or if it's cancelled
+      if (l.id === ignoreLessonId || l.status === 'cancelled') return false;
+      if (l.date !== date) return false;
+      if (!l.startTime || !l.endTime) return false;
+      // Regra: NovoInicio < HorarioFimExistente AND NovoFim > HorarioInicioExistente
+      return (start < l.endTime) && (end > l.startTime);
+    });
+  };
 
   const classLessons = (data.lessons || [])
     .filter(l => l.classId === classObj.id)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   const handleGenerateLessons = () => {
-    if (!startDate || !endDate || !dayOfWeek) {
-      showAlert('Atenção', 'Preencha todos os campos.', 'warning');
+    if (!startDate || !endDate || !dayOfWeek || !startTime || !endTime) {
+      showAlert('Atenção', 'Preencha todos os campos, incluindo horários de início e término.', 'warning');
+      return;
+    }
+
+    if (startTime >= endTime) {
+      showAlert('Atenção', 'O horário de término deve ser maior que o de início.', 'warning');
       return;
     }
 
@@ -42,6 +61,7 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
     const end = new Date(endDate);
     const day = parseInt(dayOfWeek, 10);
     const newLessons: Lesson[] = [];
+    const ignoredDates: string[] = [];
 
     // Increment date until finding the exact day
     let current = new Date(start);
@@ -50,18 +70,32 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
     }
 
     while (current <= end) {
-      newLessons.push({
-        id: crypto.randomUUID(),
-        classId: classObj.id,
-        date: current.toISOString().split('T')[0],
-        status: 'scheduled',
-        type: 'regular'
-      });
+      const dateStr = current.toISOString().split('T')[0];
+      
+      // Validação de Choque de Horários
+      if (checkCollision(dateStr, startTime, endTime)) {
+        ignoredDates.push(new Date(dateStr + 'T12:00:00Z').toLocaleDateString('pt-BR'));
+      } else {
+        newLessons.push({
+          id: crypto.randomUUID(),
+          classId: classObj.id,
+          date: dateStr,
+          startTime,
+          endTime,
+          status: 'scheduled',
+          type: 'regular'
+        });
+      }
       current.setUTCDate(current.getUTCDate() + 7); // advance one week
     }
 
-    if (newLessons.length === 0) {
+    if (newLessons.length === 0 && ignoredDates.length === 0) {
       showAlert('Atenção', 'Nenhuma data encontrada nesse período para o dia da semana selecionado.', 'warning');
+      return;
+    }
+
+    if (newLessons.length === 0 && ignoredDates.length > 0) {
+      showAlert('⚠️ Choque de Horários!', `Nenhuma aula gerada. Todas as datas pretendidas deram choque com horários existentes: ${ignoredDates.join(', ')}`, 'warning');
       return;
     }
 
@@ -70,7 +104,12 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
     dbService.saveData({ ...data, lessons: updatedLessons });
 
     setShowGenerateModal(false);
-    showAlert('Sucesso', `${newLessons.length} aulas geradas com sucesso!`, 'success');
+    
+    if (ignoredDates.length > 0) {
+      showAlert('Aviso de Agendamento Parcial', `Aulas geradas, porém os dias ${ignoredDates.join(', ')} foram ignorados devido a choque de horário no mesmo intervalo (⚠️ Choque de Horários!).`, 'warning');
+    } else {
+      showAlert('Sucesso', `${newLessons.length} aulas geradas com sucesso!`, 'success');
+    }
   };
 
   const handleCancelLesson = async (lesson: Lesson) => {
@@ -78,9 +117,19 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
       showAlert('Atenção', 'Informe o motivo do cancelamento.', 'warning');
       return;
     }
-    if (wantReplacement && !replacementDate) {
-      showAlert('Atenção', 'Informe a data de reposição.', 'warning');
-      return;
+    if (wantReplacement) {
+      if (!replacementDate || !replacementStartTime || !replacementEndTime) {
+        showAlert('Atenção', 'Informe a data e os horários da reposição.', 'warning');
+        return;
+      }
+      if (replacementStartTime >= replacementEndTime) {
+        showAlert('Atenção', 'O horário de término da reposição deve ser maior que o de início.', 'warning');
+        return;
+      }
+      if (checkCollision(replacementDate, replacementStartTime, replacementEndTime, lesson.id)) {
+        showAlert('⚠️ Choque de Horários!', 'Já existe uma aula marcada para este dia neste intervalo de tempo. Por favor, escolha outro horário.', 'warning');
+        return;
+      }
     }
 
     setIsClosing(true);
@@ -94,6 +143,8 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
         id: crypto.randomUUID(),
         classId: classObj.id,
         date: replacementDate,
+        startTime: replacementStartTime,
+        endTime: replacementEndTime,
         status: 'scheduled',
         type: 'reposicao',
         originalLessonId: lesson.id
@@ -142,6 +193,8 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
       setCancelReason('');
       setWantReplacement(false);
       setReplacementDate('');
+      setReplacementStartTime('');
+      setReplacementEndTime('');
       showAlert('Sucesso', 'Aula cancelada e notificações enviadas aos alunos.', 'success');
     }, 400);
   };
@@ -154,6 +207,8 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
       setCancelReason('');
       setWantReplacement(false);
       setReplacementDate('');
+      setReplacementStartTime('');
+      setReplacementEndTime('');
     }, 400);
   };
 
@@ -219,6 +274,11 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
                       <p className={`text-[10px] uppercase font-bold tracking-widest ${isCancelled ? 'text-red-400' : 'text-slate-400'}`}>
                         {displayDate.toLocaleString('pt-BR', { month: 'short' })}
                       </p>
+                      {lesson.startTime && lesson.endTime && (
+                        <p className={`text-[9px] font-black tracking-wider mt-1 ${isCancelled ? 'text-red-400' : 'text-indigo-500'}`}>
+                          {lesson.startTime} - {lesson.endTime}
+                        </p>
+                      )}
                       {isCancelled && (
                         <span className="inline-block mt-2 px-2 py-0.5 bg-red-100 text-red-700 text-[9px] font-black uppercase rounded-full">
                           Cancelada
@@ -268,6 +328,18 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
                   <option value="6">Sábado</option>
                 </select>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase">Horário Início</label>
+                  <input type="time" className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm" 
+                    value={startTime} onChange={e => setStartTime(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase">Horário Fim</label>
+                  <input type="time" className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm" 
+                    value={endTime} onChange={e => setEndTime(e.target.value)} />
+                </div>
+              </div>
 
               <div className="flex gap-3 pt-4 border-t border-slate-100">
                 <button onClick={() => setShowGenerateModal(false)} className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-lg transition-colors">Cancelar</button>
@@ -289,9 +361,15 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
 
             <div className="p-6">
               <p className="text-sm font-bold text-slate-500 mb-1">Data Agendada</p>
-              <p className="text-2xl font-black text-slate-800 mb-6">
+              <p className="text-2xl font-black text-slate-800">
                 {new Date(showLessonDetail.date + 'T12:00:00Z').toLocaleDateString('pt-BR')}
               </p>
+              {showLessonDetail.startTime && showLessonDetail.endTime && (
+                <p className="text-indigo-600 font-bold mb-6 mt-1 flex items-center gap-1.5 text-sm">
+                  <Clock size={16} /> {showLessonDetail.startTime} às {showLessonDetail.endTime}
+                </p>
+              )}
+              {!showLessonDetail.startTime && <div className="mb-6"></div>}
 
               {showLessonDetail.status === 'cancelled' ? (
                 <div className="p-4 bg-red-50 rounded-xl border border-red-100 text-red-800">
@@ -320,10 +398,24 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
                     </label>
                     
                     {wantReplacement && (
-                      <div className="mt-4 animate-in fade-in slide-in-from-top-2">
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Data da Reposição</label>
-                        <input type="date" className="w-full p-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                          value={replacementDate} onChange={e => setReplacementDate(e.target.value)} />
+                      <div className="mt-4 animate-in fade-in slide-in-from-top-2 space-y-4">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Data da Reposição</label>
+                          <input type="date" className="w-full p-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                            value={replacementDate} onChange={e => setReplacementDate(e.target.value)} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Início</label>
+                            <input type="time" className="w-full p-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                              value={replacementStartTime} onChange={e => setReplacementStartTime(e.target.value)} />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Fim</label>
+                            <input type="time" className="w-full p-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                              value={replacementEndTime} onChange={e => setReplacementEndTime(e.target.value)} />
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>

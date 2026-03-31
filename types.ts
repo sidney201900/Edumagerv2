@@ -66,6 +66,8 @@ export interface Lesson {
   id: string;
   classId: string;
   date: string; // ISO Date YYYY-MM-DD
+  startTime?: string; // HH:mm
+  endTime?: string; // HH:mm
   status: 'scheduled' | 'cancelled' | 'completed';
   type: 'regular' | 'reposicao';
   cancelReason?: string;
