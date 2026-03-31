@@ -23,6 +23,19 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
   const [dayOfWeek, setDayOfWeek] = useState('1'); 
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
+  const [extraCount, setExtraCount] = useState<number | ''>('');
+
+  React.useEffect(() => {
+    if (extraCount && startDate && dayOfWeek) {
+      let current = new Date(startDate + 'T12:00:00Z');
+      const day = parseInt(dayOfWeek, 10);
+      while (current.getUTCDay() !== day) {
+         current.setUTCDate(current.getUTCDate() + 1);
+      }
+      current.setUTCDate(current.getUTCDate() + (7 * (Number(extraCount) - 1)));
+      setEndDate(current.toISOString().split('T')[0]);
+    }
+  }, [extraCount, startDate, dayOfWeek]);
 
   // Form states for cancellation
   const [cancelReason, setCancelReason] = useState('');
@@ -293,6 +306,21 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
     });
   };
 
+  const handleUncancelAllFuture = () => {
+    showConfirm('Reativar Cronograma', 'Deseja realmente reativar TODAS as aulas futuras que estavam canceladas?', async () => {
+      const today = new Date().toISOString().split('T')[0];
+      const updatedLessons = (data.lessons || []).map(l => {
+        if (l.classId === classObj.id && l.status === 'cancelled' && l.date >= today) {
+          return { ...l, status: 'scheduled', cancelReason: undefined };
+        }
+        return l;
+      });
+      updateData({ lessons: updatedLessons as Lesson[] });
+      await dbService.saveData({ ...data, lessons: updatedLessons as Lesson[] });
+      showAlert('Sucesso', 'Cronograma futuro reativado com sucesso.', 'success');
+    });
+  };
+
   const closeLessonDetail = () => {
     setIsClosing(true);
     setTimeout(() => {
@@ -325,13 +353,20 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
               className="px-4 py-2 bg-red-100 text-red-700 font-bold rounded-xl hover:bg-red-200 transition-colors flex items-center gap-2"
               title="Cancela todas as próximas aulas da turma"
             >
-              <AlertCircle size={18} /> Cancelar Tudo
+              <AlertCircle size={18} /> Cancelar Todas
+            </button>
+            <button 
+              onClick={handleUncancelAllFuture}
+              className="px-4 py-2 bg-emerald-100 text-emerald-700 font-bold rounded-xl hover:bg-emerald-200 transition-colors flex items-center gap-2"
+              title="Reativa todas as próximas aulas canceladas"
+            >
+              <RefreshCw size={18} /> Reativar Todas
             </button>
             <button 
               onClick={() => setShowGenerateModal(true)}
               className="px-4 py-2 bg-indigo-100 text-indigo-700 font-bold rounded-xl hover:bg-indigo-200 transition-colors flex items-center gap-2"
             >
-              <Plus size={18} /> Gerar Aulas
+              <Plus size={18} /> Adicionar Aula Extra
             </button>
             <button onClick={onClose} className="p-2 bg-slate-100 text-slate-500 hover:text-red-500 rounded-xl transition-all">
               <X size={20} />
@@ -403,16 +438,21 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
       {showGenerateModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in-95">
-            <h3 className="text-xl font-black text-slate-800 mb-4">Gerar Aulas em Massa</h3>
+            <h3 className="text-xl font-black text-slate-800 mb-4">Adicionar Aula Extra</h3>
             
             <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase">Quantidade de Aulas Adicionais</label>
+                <input type="number" min="1" className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm" 
+                  value={extraCount} onChange={e => setExtraCount(parseInt(e.target.value) || '')} />
+              </div>
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase">Data Início</label>
                 <input type="date" className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm" 
                   value={startDate} onChange={e => setStartDate(e.target.value)} />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase">Data Fim</label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase">Data Fim (Automática)</label>
                 <input type="date" className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm" 
                   value={endDate} onChange={e => setEndDate(e.target.value)} />
               </div>
@@ -444,7 +484,7 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
 
               <div className="flex gap-3 pt-4 border-t border-slate-100">
                 <button onClick={() => setShowGenerateModal(false)} className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-lg transition-colors">Cancelar</button>
-                <button onClick={handleGenerateLessons} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors">Gerar</button>
+                <button onClick={handleGenerateLessons} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors">Adicionar</button>
               </div>
             </div>
           </div>

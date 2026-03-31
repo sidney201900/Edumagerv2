@@ -24,12 +24,15 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
     courseId: '',
     teacher: '',
     schedule: '',
+    scheduleDay: '',
     maxStudents: 15,
     startDate: '',
     endDate: '',
     defaultStartTime: '',
     defaultEndTime: ''
   });
+
+  const DAY_NAMES = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 
   const [quickTimeClass, setQuickTimeClass] = useState<Class | null>(null);
   const [quickStartTime, setQuickStartTime] = useState('');
@@ -53,18 +56,74 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.courseId || !formData.teacher || !formData.schedule) {
+    if (!formData.name || !formData.courseId || !formData.teacher) {
       showAlert('Atenção', '⚠️ Por favor, preencha todos os campos obrigatórios.', 'warning');
       return;
     }
 
-    if (editingClass) {
-      const updated = data.classes.map(c => c.id === editingClass.id ? { ...formData, id: c.id } : c);
-      updateData({ classes: updated });
-    } else {
-      const newClass: Class = { ...formData, id: crypto.randomUUID() };
-      updateData({ classes: [...data.classes, newClass] });
+    const newClassId = editingClass ? editingClass.id : crypto.randomUUID();
+    const resolvedScheduleName = formData.scheduleDay ? DAY_NAMES[parseInt(formData.scheduleDay)] : formData.schedule;
+
+    const newClass: Class = { 
+      ...formData, 
+      id: newClassId,
+      schedule: resolvedScheduleName
+    };
+
+    let updatedLessons = [...(data.lessons || [])];
+
+    // Gerar cronograma automaticamente (novo ou atualizar/completar o editado)
+    if (newClass.startDate && newClass.endDate && newClass.scheduleDay && newClass.defaultStartTime && newClass.defaultEndTime) {
+      const generatedLessons = [];
+      let currentDate = new Date(newClass.startDate + 'T12:00:00Z');
+      const endObject = new Date(newClass.endDate + 'T12:00:00Z');
+      const targetDay = parseInt(newClass.scheduleDay);
+
+      while (currentDate.getUTCDay() !== targetDay) {
+        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+      }
+
+      while (currentDate <= endObject) {
+         const dateString = currentDate.toISOString().split('T')[0];
+         const exists = updatedLessons.some(l => l.classId === newClass.id && l.date === dateString);
+         if (!exists) {
+            generatedLessons.push({
+               id: crypto.randomUUID(),
+               classId: newClass.id,
+               date: dateString,
+               startTime: newClass.defaultStartTime,
+               endTime: newClass.defaultEndTime,
+               status: 'scheduled',
+               type: 'regular'
+            });
+         }
+         currentDate.setUTCDate(currentDate.getUTCDate() + 7);
+      }
+
+      // Se editando, também atualiza o horário das aulas futuras programadas
+      if (editingClass) {
+         const today = new Date().toISOString().split('T')[0];
+         updatedLessons = updatedLessons.map(l => {
+           if (l.classId === newClass.id && l.status === 'scheduled' && l.date >= today) {
+              return { ...l, startTime: newClass.defaultStartTime, endTime: newClass.defaultEndTime };
+           }
+           return l;
+         });
+      }
+
+      updatedLessons = [...updatedLessons, ...generatedLessons];
     }
+
+    let updatedClasses = [];
+    if (editingClass) {
+      updatedClasses = data.classes.map(c => c.id === editingClass.id ? newClass : c);
+    } else {
+      updatedClasses = [...data.classes, newClass];
+    }
+
+    updateData({ classes: updatedClasses, lessons: updatedLessons });
+    dbService.saveData({ ...data, classes: updatedClasses, lessons: updatedLessons });
+
     closeModal();
   };
 
@@ -173,34 +232,12 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-wrap justify-end">
                   <button 
-                    onClick={() => {
-                      setQuickTimeClass(cls);
-                      setQuickStartTime(cls.defaultStartTime || '');
-                      setQuickEndTime(cls.defaultEndTime || '');
-                    }}
-                    className="p-2 text-indigo-500 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-lg transition-all" 
-                    title="Editar Horário Exato"
-                  >
-                    <Settings size={16} />
-                  </button>
-                  <button 
-                    onClick={() => setScheduleClass(cls)}
-                    className="p-2 text-indigo-500 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-lg transition-all" 
-                    title="Cronograma de Aulas"
-                  >
-                    <Calendar size={16} />
-                  </button>
-                  <button 
                     onClick={() => handleDownloadClassList(cls)} 
                     disabled={isGeneratingPDF === cls.id}
-                    className="p-2 text-slate-400 hover:text-indigo-600 rounded-lg transition-all disabled:opacity-50" 
+                    className="p-2 text-slate-400 hover:text-indigo-600 rounded-lg transition-all disabled:opacity-50 inline-flex items-center gap-1 bg-slate-50 hover:bg-indigo-50" 
                     title="Imprimir Diário"
                   >
-                    {isGeneratingPDF === cls.id ? (
-                      <RefreshCw size={16} className="animate-spin" />
-                    ) : (
-                      <Printer size={16} />
-                    )}
+                    {isGeneratingPDF === cls.id ? <RefreshCw size={16} className="animate-spin" /> : <Printer size={16} />}
                   </button>
                   <button onClick={() => handleEdit(cls)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all">
                     <Edit2 size={16} />
@@ -222,8 +259,15 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
                 <div className="flex items-center gap-3 text-sm text-slate-600 bg-slate-50 p-3 rounded-lg">
                   <Clock size={18} className="text-indigo-500" /> 
                   <div>
-                    <p className="text-[10px] uppercase font-bold text-slate-400">Horário</p>
-                    <p className="font-semibold text-slate-800">{cls.schedule}</p>
+                    <p className="text-[10px] uppercase font-bold text-slate-400">Dias de Aula</p>
+                    <p className="font-semibold text-slate-800 flex items-center gap-2">
+                       {cls.scheduleDay ? DAY_NAMES[parseInt(cls.scheduleDay)] : cls.schedule}
+                       {cls.defaultStartTime && cls.defaultEndTime && (
+                         <span className="text-indigo-600 font-black">
+                           {cls.defaultStartTime} às {cls.defaultEndTime}
+                         </span>
+                       )}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -242,6 +286,13 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
                   />
                 </div>
               </div>
+
+              <button
+                 onClick={() => setScheduleClass(cls)}
+                 className="w-full mt-5 bg-indigo-50 border border-indigo-100 text-indigo-700 hover:bg-indigo-600 hover:text-white py-3.5 rounded-xl font-black flex items-center justify-center gap-2 transition-all shadow-sm group-hover:shadow-md"
+              >
+                <Calendar size={22} className="group-hover:scale-110 transition-transform" /> Abrir Cronograma
+              </button>
             </div>
           );
         })}
@@ -256,7 +307,7 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
 
       {isModalOpen && (
         <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
-          <div className={`bg-white rounded-xl w-full max-w-md shadow-2xl my-auto transition-all duration-400 relative overflow-hidden ${isClosing ? 'animate-slide-down-fade-out' : 'animate-slide-up'}`}>
+          <div className={`bg-white rounded-xl w-full max-w-2xl shadow-2xl my-auto transition-all duration-400 relative overflow-hidden ${isClosing ? 'animate-slide-down-fade-out' : 'animate-slide-up'}`}>
             {/* Blue Top Bar */}
             <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
             
@@ -271,40 +322,25 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
                 <X size={24} />
               </button>
             </div>
-            <form onSubmit={handleSubmit} className="p-8 space-y-5">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Nome da Turma</label>
-                <input required className={inputClass} placeholder="Ex: TURMA A - NOITE"
-                  value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+            <form onSubmit={handleSubmit} className="p-8 space-y-6">
+              
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Nome da Turma</label>
+                  <input required className={inputClass} placeholder="Ex: TURMA A - NOITE"
+                    value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Curso Vinculado</label>
+                  <select required className={inputClass}
+                    value={formData.courseId} onChange={e => setFormData({...formData, courseId: e.target.value})}>
+                    <option value="">Selecione um curso...</option>
+                    {data.courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Curso Vinculado</label>
-                <select required className={inputClass}
-                  value={formData.courseId} onChange={e => setFormData({...formData, courseId: e.target.value})}>
-                  <option value="">Selecione um curso...</option>
-                  {data.courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Professor Responsável</label>
-                <select required className={inputClass}
-                  value={formData.teacher} onChange={e => setFormData({...formData, teacher: e.target.value})}>
-                  <option value="">Selecione um professor...</option>
-                  {(data.employees || [])
-                    .filter(e => {
-                      const catName = (data.employeeCategories || []).find(c => c.id === e.categoryId)?.name?.toLowerCase() || '';
-                      return catName.includes('professor') || catName.includes('prof');
-                    })
-                    .map(emp => (
-                      <option key={emp.id} value={emp.name}>{emp.name}</option>
-                    ))}
-                  {/* Se já houver um professor na turma e ele não for da listagem, mantê-lo visível no select */}
-                  {formData.teacher && !(data.employees || []).some(e => e.name === formData.teacher) && (
-                    <option value={formData.teacher}>{formData.teacher} (Manual)</option>
-                  )}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+
+              <div className="grid grid-cols-2 gap-6">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Data de Início</label>
                   <input type="date" required className={inputClass}
@@ -316,57 +352,63 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
                     value={formData.endDate} onChange={e => setFormData({...formData, endDate: e.target.value})} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+
+              <div className="grid grid-cols-3 gap-6">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Dias da Semana (Nomeável)</label>
-                  <input placeholder="Ex: Seg/Qua" required className={inputClass}
-                    value={formData.schedule} onChange={e => setFormData({...formData, schedule: e.target.value})} />
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Dia da Semana</label>
+                  <select required className={inputClass}
+                    value={formData.scheduleDay} onChange={e => setFormData({...formData, scheduleDay: e.target.value})}>
+                    <option value="">Selecione...</option>
+                    {DAY_NAMES.map((d, i) => <option key={i} value={i}>{d}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Vagas</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Início (Hora)</label>
+                  <input type="time" required className={inputClass}
+                    value={formData.defaultStartTime} onChange={e => setFormData({...formData, defaultStartTime: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Término (Hora)</label>
+                  <input type="time" required className={inputClass}
+                    value={formData.defaultEndTime} onChange={e => setFormData({...formData, defaultEndTime: e.target.value})} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Vagas Locais</label>
                   <input type="number" required className={inputClass}
                     value={formData.maxStudents} onChange={e => setFormData({...formData, maxStudents: parseInt(e.target.value) || 0})} />
                 </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Professor Responsável</label>
+                  <select required className={inputClass}
+                    value={formData.teacher} onChange={e => setFormData({...formData, teacher: e.target.value})}>
+                    <option value="">Selecione um professor...</option>
+                    {(data.employees || [])
+                      .filter(e => {
+                        const catName = (data.employeeCategories || []).find(c => c.id === e.categoryId)?.name?.toLowerCase() || '';
+                        return catName.includes('professor') || catName.includes('prof');
+                      })
+                      .map(emp => (
+                        <option key={emp.id} value={emp.name}>{emp.name}</option>
+                      ))}
+                    {formData.teacher && !(data.employees || []).some(e => e.name === formData.teacher) && (
+                      <option value={formData.teacher}>{formData.teacher} (Manual)</option>
+                    )}
+                  </select>
+                </div>
               </div>
-              <div className="pt-6 flex gap-4">
+
+              <div className="pt-4 flex gap-4 border-t border-slate-100">
                 <button type="button" onClick={closeModal} className="flex-1 px-6 py-4 border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition-colors font-bold">
                   Cancelar
                 </button>
                 <button type="submit" className="flex-1 px-6 py-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg font-bold">
-                  {editingClass ? 'Salvar Alterações' : 'Criar Turma'}
+                  {editingClass ? 'Atualizar e Sincronizar Calendário' : 'Criar Turma e Gerar Calendário'}
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Quick Time Editing Modal */}
-      {quickTimeClass && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in-95">
-            <h3 className="text-xl font-black text-slate-800 mb-2">Editar Horário Central</h3>
-            <p className="text-xs text-slate-500 font-medium mb-4">Esta alteração atualizará o horário da turma e de TODAS as aulas futuras não-canceladas deste cronograma.</p>
-            
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase">Horário Início</label>
-                  <input type="time" className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm" 
-                    value={quickStartTime} onChange={e => setQuickStartTime(e.target.value)} />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase">Horário Fim</label>
-                  <input type="time" className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm" 
-                    value={quickEndTime} onChange={e => setQuickEndTime(e.target.value)} />
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-4 border-t border-slate-100">
-                <button onClick={() => setQuickTimeClass(null)} className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-lg transition-colors">Cancelar</button>
-                <button onClick={handleQuickTimeSave} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors">Aplicar</button>
-              </div>
-            </div>
           </div>
         </div>
       )}

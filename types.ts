@@ -59,6 +59,7 @@ export interface Class {
   courseId: string; // Linked to Course.id
   teacher: string;
   schedule: string;
+  scheduleDay?: string; // NOVO: 0 (Domingo) a 6 (Sábado)
   maxStudents: number;
   startDate?: string;
   endDate?: string;
