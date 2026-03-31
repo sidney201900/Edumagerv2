@@ -60,6 +60,10 @@ export interface Class {
   teacher: string;
   schedule: string;
   maxStudents: number;
+  startDate?: string;
+  endDate?: string;
+  defaultStartTime?: string;
+  defaultEndTime?: string;
 }
 
 export interface Lesson {

@@ -167,16 +167,49 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
     updateData({ lessons: updatedLessons, notifications: updatedNotifications });
     await dbService.saveData({ ...data, lessons: updatedLessons, notifications: updatedNotifications });
 
-    // Notificar via Whatsapp (Integração existente no backend)
+    // Notificar via Whatsapp
     try {
-      const payloadAlunos = students.map(s => ({
-        nome: s.name,
-        telefone: s.phone,
-        nome_responsavel: s.guardianName,
-        telefone_responsavel: s.guardianPhone
-      }));
+      const payloadAlunos = students.map(student => {
+        const birthDateStr = student.birthDate || '';
+        let age = 18;
+        if (birthDateStr && birthDateStr.includes('-')) {
+          const [year, month, day] = birthDateStr.split('-').map(Number);
+          const birthDate = new Date(year, month - 1, day);
+          const today = new Date();
+          age = today.getFullYear() - birthDate.getFullYear();
+          const m = today.getMonth() - birthDate.getMonth();
+          if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+              age--;
+          }
+        }
+        const isMinor = age < 18;
+        
+        let targetPhone = isMinor && student.guardianPhone && student.guardianPhone.trim() !== '' 
+          ? student.guardianPhone 
+          : student.phone;
+          
+        if (!targetPhone) {
+          // Fallback: tenta pegar o responsável para maior ou o aluno para menor, se o principal foi vazio
+          targetPhone = student.guardianPhone || student.phone || '';
+        }
 
-      const msgWa = `🚨 *Aviso Importante: Aula Cancelada*\n\nOlá, {nome}!\nInformamos que a aula da turma *${classObj.name}* programada para o dia *${new Date(lesson.date).toLocaleDateString('pt-BR')}* foi cancelada.\n\n*Motivo:* ${cancelReason}\n${wantReplacement ? `\n✅ *Reposição agendada para o dia:* ${new Date(replacementDate).toLocaleDateString('pt-BR')}` : ''}\n\nAgradecemos a compreensão.`;
+        let targetName = isMinor && student.guardianName && student.guardianName.trim() !== '' 
+          ? student.guardianName 
+          : student.name;
+          
+        if (!targetName) {
+           targetName = student.guardianName || student.name || '';
+        }
+
+        return {
+          nome: targetName,
+          telefone: targetPhone,
+          nome_responsavel: student.guardianName,
+          telefone_responsavel: student.guardianPhone
+        };
+      });
+
+      const msgWa = `🚨 *Aviso Importante: Aula Cancelada*\n\nOlá, {nome}!\nInformamos que a aula da turma *${classObj.name}* programada para o dia *${new Date(lesson.date + 'T12:00:00Z').toLocaleDateString('pt-BR')}* foi cancelada.\n\n*Motivo:* ${cancelReason}\n${wantReplacement && replacementDate ? `\n✅ *Reposição agendada para o dia:* ${new Date(replacementDate + 'T12:00:00Z').toLocaleDateString('pt-BR')}` : ''}\n\nAgradecemos a compreensão.`;
 
       fetch('/api/enviar-massa', {
         method: 'POST',
@@ -197,6 +230,67 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
       setReplacementEndTime('');
       showAlert('Sucesso', 'Aula cancelada e notificações enviadas aos alunos.', 'success');
     }, 400);
+  };
+
+  const handleUncancelLesson = async (lesson: Lesson) => {
+    setIsClosing(true);
+    const updatedLessons: Lesson[] = (data.lessons || []).map(l => 
+      l.id === lesson.id ? { ...l, status: 'scheduled', cancelReason: undefined } : l
+    );
+    updateData({ lessons: updatedLessons });
+    await dbService.saveData({ ...data, lessons: updatedLessons });
+
+    setTimeout(() => {
+      setShowLessonDetail(null);
+      setIsClosing(false);
+      showAlert('Sucesso', 'Aula reativada com sucesso.', 'success');
+    }, 400);
+  };
+
+  const handleRescheduleLesson = async (lesson: Lesson) => {
+    if (!replacementDate || !replacementStartTime || !replacementEndTime) {
+      showAlert('Atenção', 'Informe nova data e horários.', 'warning');
+      return;
+    }
+    if (replacementStartTime >= replacementEndTime) {
+      showAlert('Atenção', 'Horário de término deve ser maior que o de início.', 'warning');
+      return;
+    }
+    if (checkCollision(replacementDate, replacementStartTime, replacementEndTime, lesson.id)) {
+      showAlert('⚠️ Choque de Horários!', 'Já existe uma aula marcada para este intervalo de tempo.', 'warning');
+      return;
+    }
+
+    setIsClosing(true);
+    const updatedLessons: Lesson[] = (data.lessons || []).map(l => 
+      l.id === lesson.id ? { ...l, date: replacementDate, startTime: replacementStartTime, endTime: replacementEndTime } : l
+    );
+    updateData({ lessons: updatedLessons });
+    await dbService.saveData({ ...data, lessons: updatedLessons });
+
+    setTimeout(() => {
+      setShowLessonDetail(null);
+      setIsClosing(false);
+      setReplacementDate('');
+      setReplacementStartTime('');
+      setReplacementEndTime('');
+      showAlert('Sucesso', 'Aula reagendada com sucesso.', 'success');
+    }, 400);
+  };
+
+  const handleCancelAllFuture = () => {
+    showConfirm('Cancelar Cronograma', 'Deseja realmente cancelar TODAS as aulas futuras não realizadas? Não haverá reposição e a ação atualizará todas para Cancelada.', async () => {
+      const today = new Date().toISOString().split('T')[0];
+      const updatedLessons = (data.lessons || []).map(l => {
+        if (l.classId === classObj.id && l.status === 'scheduled' && l.date >= today) {
+          return { ...l, status: 'cancelled', cancelReason: 'Cancelamento Geral de Cronograma' };
+        }
+        return l;
+      });
+      updateData({ lessons: updatedLessons as Lesson[] });
+      await dbService.saveData({ ...data, lessons: updatedLessons as Lesson[] });
+      showAlert('Sucesso', 'Cronograma futuro cancelado.', 'success');
+    });
   };
 
   const closeLessonDetail = () => {
@@ -227,10 +321,17 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
           </div>
           <div className="flex items-center gap-3">
             <button 
+              onClick={handleCancelAllFuture}
+              className="px-4 py-2 bg-red-100 text-red-700 font-bold rounded-xl hover:bg-red-200 transition-colors flex items-center gap-2"
+              title="Cancela todas as próximas aulas da turma"
+            >
+              <AlertCircle size={18} /> Cancelar Tudo
+            </button>
+            <button 
               onClick={() => setShowGenerateModal(true)}
               className="px-4 py-2 bg-indigo-100 text-indigo-700 font-bold rounded-xl hover:bg-indigo-200 transition-colors flex items-center gap-2"
             >
-              <Plus size={18} /> Gerar Aulas do Ano
+              <Plus size={18} /> Gerar Aulas
             </button>
             <button onClick={onClose} className="p-2 bg-slate-100 text-slate-500 hover:text-red-500 rounded-xl transition-all">
               <X size={20} />
@@ -372,35 +473,38 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
               {!showLessonDetail.startTime && <div className="mb-6"></div>}
 
               {showLessonDetail.status === 'cancelled' ? (
-                <div className="p-4 bg-red-50 rounded-xl border border-red-100 text-red-800">
-                  <div className="flex items-center gap-2 mb-2">
-                    <AlertCircle size={18} /> <span className="font-bold">Aula Cancelada</span>
+                <div className="space-y-4">
+                  <div className="p-4 bg-red-50 rounded-xl border border-red-100 text-red-800">
+                    <div className="flex items-center gap-2 mb-2">
+                      <AlertCircle size={18} /> <span className="font-bold">Aula Cancelada</span>
+                    </div>
+                    <p className="text-sm"><strong>Motivo:</strong> {showLessonDetail.cancelReason}</p>
                   </div>
-                  <p className="text-sm"><strong>Motivo:</strong> {showLessonDetail.cancelReason}</p>
+                  <button 
+                    onClick={() => handleUncancelLesson(showLessonDetail)}
+                    className="w-full py-4 bg-emerald-500 text-white rounded-xl font-black flex items-center justify-center gap-2 hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-200"
+                  >
+                    <RefreshCw size={20} /> Reativar Aula
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-red-500 uppercase tracking-widest mb-1">Motivo do Cancelamento</label>
-                    <textarea 
-                      className="w-full p-3 bg-red-50 border border-red-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 text-sm placeholder-red-300"
-                      placeholder="Ex: Doença do professor..."
-                      value={cancelReason}
-                      onChange={e => setCancelReason(e.target.value)}
-                    />
-                  </div>
-
                   <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
                     <label className="flex items-center gap-2 cursor-pointer select-none">
                       <input type="checkbox" className="w-4 h-4 text-indigo-600 rounded"
-                        checked={wantReplacement} onChange={e => setWantReplacement(e.target.checked)} />
-                      <span className="text-sm font-bold text-slate-700">Deseja agendar reposição agora?</span>
+                        checked={wantReplacement} onChange={e => {
+                          setWantReplacement(e.target.checked);
+                          // Se desmarcou para reagendar, garante que limpa motivo
+                          if (e.target.checked) setCancelReason('');
+                        }} />
+                      <span className="text-sm font-bold text-slate-700">Reagendar esta aula (manter existente)</span>
                     </label>
-                    
+                    <p className="text-[10px] text-slate-500 mt-1 mb-2 leading-tight">Marque se deseja apenas trocar a data/horário sem gerar evento de cancelamento ou notificar os alunos agora.</p>
+
                     {wantReplacement && (
-                      <div className="mt-4 animate-in fade-in slide-in-from-top-2 space-y-4">
+                      <div className="mt-2 animate-in fade-in slide-in-from-top-2 space-y-4">
                         <div>
-                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Data da Reposição</label>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Nova Data</label>
                           <input type="date" className="w-full p-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                             value={replacementDate} onChange={e => setReplacementDate(e.target.value)} />
                         </div>
@@ -416,16 +520,33 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
                               value={replacementEndTime} onChange={e => setReplacementEndTime(e.target.value)} />
                           </div>
                         </div>
+                        <button 
+                          onClick={() => handleRescheduleLesson(showLessonDetail)}
+                          className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-indigo-700 transition-colors"
+                        >
+                          Salvar Reagendamento
+                        </button>
                       </div>
                     )}
                   </div>
 
-                  <button 
-                    onClick={() => handleCancelLesson(showLessonDetail)}
-                    className="w-full py-4 bg-red-500 text-white rounded-xl font-black flex items-center justify-center gap-2 hover:bg-red-600 transition-colors shadow-lg shadow-red-200"
-                  >
-                    <AlertCircle size={20} /> Cancelar Aula e Notificar
-                  </button>
+                  {!wantReplacement && (
+                    <div className="p-4 bg-red-50/50 rounded-xl border border-red-100 mt-4 animate-in fade-in">
+                      <label className="block text-[10px] font-bold text-red-500 uppercase tracking-widest mb-1">Cancelar Aula - Informe o Motivo</label>
+                      <textarea 
+                        className="w-full p-3 bg-white border border-red-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 text-sm placeholder-slate-300"
+                        placeholder="Ex: Doença do professor..."
+                        value={cancelReason}
+                        onChange={e => setCancelReason(e.target.value)}
+                      />
+                      <button 
+                        onClick={() => handleCancelLesson(showLessonDetail)}
+                        className="w-full mt-4 py-4 bg-red-500 text-white rounded-xl font-black flex items-center justify-center gap-2 hover:bg-red-600 transition-colors shadow-lg shadow-red-200"
+                      >
+                        <AlertCircle size={20} /> Cancelar e Notificar
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

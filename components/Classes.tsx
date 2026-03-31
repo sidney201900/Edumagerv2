@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { SchoolData, Class } from '../types';
 import { useDialog } from '../DialogContext';
-import { Plus, Edit2, Trash2, X, Clock, User, Book, GraduationCap, Printer, AlertTriangle, RefreshCw, Calendar } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Clock, User, Book, Printer, RefreshCw, Calendar, Settings } from 'lucide-react';
 import { pdfService } from '../services/pdfService';
 import LessonSchedule from './LessonSchedule';
+import { dbService } from '../services/dbService';
 
 interface ClassesProps {
   data: SchoolData;
@@ -23,8 +24,31 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
     courseId: '',
     teacher: '',
     schedule: '',
-    maxStudents: 15
+    maxStudents: 15,
+    startDate: '',
+    endDate: '',
+    defaultStartTime: '',
+    defaultEndTime: ''
   });
+
+  const [quickTimeClass, setQuickTimeClass] = useState<Class | null>(null);
+  const [quickStartTime, setQuickStartTime] = useState('');
+  const [quickEndTime, setQuickEndTime] = useState('');
+
+  // Auto-calculate end date
+  React.useEffect(() => {
+    if (formData.courseId && formData.startDate && !editingClass) {
+      const course = data.courses.find(c => c.id === formData.courseId);
+      if (course && course.durationMonths) {
+        const start = new Date(formData.startDate);
+        const end = new Date(start);
+        end.setUTCMonth(end.getUTCMonth() + course.durationMonths);
+        const endString = end.toISOString().split('T')[0];
+        // Somente seta se estiver vazio ou quisermos sobrescrever silenciosamente (melhor só sobrescrever se não tiver sido editado)
+        setFormData(prev => ({ ...prev, endDate: endString }));
+      }
+    }
+  }, [formData.courseId, formData.startDate, data.courses, editingClass]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +105,37 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
     }
   };
 
+  const handleQuickTimeSave = () => {
+    if (!quickTimeClass || !quickStartTime || !quickEndTime) {
+      showAlert('Atenção', 'Preencha início e término.', 'warning');
+      return;
+    }
+
+    if (quickStartTime >= quickEndTime) {
+      showAlert('Atenção', 'Fim deve ser maior que início.', 'warning');
+      return;
+    }
+
+    // Save class default times
+    const updatedClass = { ...quickTimeClass, defaultStartTime: quickStartTime, defaultEndTime: quickEndTime };
+    const updatedClasses = data.classes.map(c => c.id === quickTimeClass.id ? updatedClass : c);
+    
+    // Update all future scheduled lessons for this class
+    const today = new Date().toISOString().split('T')[0];
+    const updatedLessons = (data.lessons || []).map(l => {
+      if (l.classId === quickTimeClass.id && l.status === 'scheduled' && l.date >= today) {
+        return { ...l, startTime: quickStartTime, endTime: quickEndTime };
+      }
+      return l;
+    });
+
+    updateData({ classes: updatedClasses, lessons: updatedLessons });
+    dbService.saveData({ ...data, classes: updatedClasses, lessons: updatedLessons });
+
+    setQuickTimeClass(null);
+    showAlert('Sucesso', 'Horário alterado para a turma e todas as aulas futuras atualizadas!', 'success');
+  };
+
   const inputClass = "w-full px-4 py-3 bg-white text-black border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm";
 
   return (
@@ -110,8 +165,24 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
                 <div>
                   <h3 className="text-xl font-black text-slate-900 leading-tight">{cls.name}</h3>
                   <span className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em]">{course?.name || 'Sem Curso Vinculado'}</span>
+                  {cls.defaultStartTime && cls.defaultEndTime && (
+                    <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-lg border border-indigo-100">
+                      <Clock size={12} /> {cls.defaultStartTime} - {cls.defaultEndTime}
+                    </div>
+                  )}
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-wrap justify-end">
+                  <button 
+                    onClick={() => {
+                      setQuickTimeClass(cls);
+                      setQuickStartTime(cls.defaultStartTime || '');
+                      setQuickEndTime(cls.defaultEndTime || '');
+                    }}
+                    className="p-2 text-indigo-500 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-lg transition-all" 
+                    title="Editar Horário Exato"
+                  >
+                    <Settings size={16} />
+                  </button>
                   <button 
                     onClick={() => setScheduleClass(cls)}
                     className="p-2 text-indigo-500 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-lg transition-all" 
@@ -235,8 +306,20 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Horário</label>
-                  <input placeholder="Ex: Seg/Qua 14h" required className={inputClass}
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Data de Início</label>
+                  <input type="date" required className={inputClass}
+                    value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Data de Fim (Automática)</label>
+                  <input type="date" required className={inputClass}
+                    value={formData.endDate} onChange={e => setFormData({...formData, endDate: e.target.value})} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Dias da Semana (Nomeável)</label>
+                  <input placeholder="Ex: Seg/Qua" required className={inputClass}
                     value={formData.schedule} onChange={e => setFormData({...formData, schedule: e.target.value})} />
                 </div>
                 <div>
@@ -254,6 +337,36 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Time Editing Modal */}
+      {quickTimeClass && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in-95">
+            <h3 className="text-xl font-black text-slate-800 mb-2">Editar Horário Central</h3>
+            <p className="text-xs text-slate-500 font-medium mb-4">Esta alteração atualizará o horário da turma e de TODAS as aulas futuras não-canceladas deste cronograma.</p>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase">Horário Início</label>
+                  <input type="time" className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm" 
+                    value={quickStartTime} onChange={e => setQuickStartTime(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase">Horário Fim</label>
+                  <input type="time" className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm" 
+                    value={quickEndTime} onChange={e => setQuickEndTime(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-slate-100">
+                <button onClick={() => setQuickTimeClass(null)} className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-lg transition-colors">Cancelar</button>
+                <button onClick={handleQuickTimeSave} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors">Aplicar</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
