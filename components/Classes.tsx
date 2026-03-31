@@ -60,6 +60,19 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
       return;
     }
 
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    if (formData.startDate) {
+      if (!editingClass && formData.startDate < todayStr) {
+        showAlert('Atenção', 'A data de início da turma não pode ser retroativa.', 'warning');
+        return;
+      }
+      if (editingClass && formData.startDate !== editingClass.startDate && formData.startDate < todayStr) {
+        showAlert('Atenção', 'Não é possível alterar a data de início para uma data retroativa.', 'warning');
+        return;
+      }
+    }
+
     const newClassId = editingClass ? editingClass.id : crypto.randomUUID();
     const resolvedScheduleName = formData.scheduleDay ? DAY_NAMES[parseInt(formData.scheduleDay)] : formData.schedule;
 
@@ -74,13 +87,19 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
     // Gerar cronograma automaticamente
     if (newClass.startDate && newClass.endDate && newClass.scheduleDay && newClass.defaultStartTime && newClass.defaultEndTime) {
       
-      // Se editando, REMOVE todo o cronograma antigo desta turma para recriar
+      let generationStartStr = newClass.startDate;
+
       if (editingClass) {
-        updatedLessons = updatedLessons.filter(l => l.classId !== newClass.id);
+        // Ao editar, não podemos apagar aulas antigas do passado. Apagamos só de HOJE em diante:
+        updatedLessons = updatedLessons.filter(l => !(l.classId === newClass.id && l.date >= todayStr));
+        
+        // E geramos as novas aulas a partir de onde a turma estiver programada para começar,
+        // mas nunca antes de hoje (para não recriar aulas no passado)
+        generationStartStr = newClass.startDate > todayStr ? newClass.startDate : todayStr;
       }
 
       const generatedLessons = [];
-      let currentDate = new Date(newClass.startDate + 'T12:00:00Z');
+      let currentDate = new Date(generationStartStr + 'T12:00:00Z');
       const endObject = new Date(newClass.endDate + 'T12:00:00Z');
       const targetDay = parseInt(newClass.scheduleDay);
 
