@@ -6,6 +6,7 @@ import { Search, Calendar, User, Clock, CheckCircle, XCircle, FileDown, BookOpen
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { addHeader } from '../services/pdfService';
+import SearchableSelect from './SearchableSelect';
 
 interface AttendanceQueryProps {
   data: SchoolData;
@@ -228,18 +229,46 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData }) =
                           <p className="text-xs text-slate-500 font-medium">{selectedClass.name}</p>
                         </div>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right flex flex-col items-end">
                         <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 mb-1">
                           <Clock size={12} /> {time}
                         </div>
                         {record.type === 'absence' ? (
-                          <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
-                            <AlertCircle size={10} /> Falta Justificada
-                          </span>
+                          <div className="flex flex-col items-end gap-2">
+                            <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                              <AlertCircle size={10} /> Falta Registrada
+                            </span>
+                            {record.justification && (
+                              <div className="text-xs text-slate-600 bg-amber-50 border border-amber-200 p-2 rounded-lg max-w-[200px] text-left shadow-sm">
+                                <p className="font-bold text-amber-800 mb-1 flex items-center gap-1">
+                                  <AlertCircle size={12} /> Justificativa do Aluno:
+                                </p>
+                                <p className="mb-2 line-clamp-3" title={record.justification}>{record.justification}</p>
+                                <button 
+                                  onClick={() => {
+                                    const updated = (data.attendance || []).map(a => a.id === record.id ? { ...a, type: 'presence' } : a);
+                                    updateData({ attendance: updated });
+                                    dbService.saveData({ ...data, attendance: updated });
+                                    showAlert('Sucesso', 'Falta abonada com sucesso. Type alterado para presença.', 'success');
+                                  }}
+                                  className="w-full text-center text-[10px] px-2 py-1.5 bg-indigo-600 text-white font-bold rounded hover:bg-indigo-700 transition-colors"
+                                >
+                                  Aceitar (Abonar Falta)
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         ) : (
-                          <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
-                            <CheckCircle size={10} /> Presente
-                          </span>
+                          <div className="flex flex-col items-end gap-2">
+                            <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                              <CheckCircle size={10} /> Presente {record.justification && '(Abonada)'}
+                            </span>
+                            {record.justification && (
+                              <div className="text-[10px] text-slate-500 max-w-[150px] text-right" title={`Justificativa aceita: ${record.justification}`}>
+                                <p className="truncate"><span className="font-bold text-emerald-600">Aceita:</span> {record.justification}</p>
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -278,20 +307,16 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData }) =
 
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Aluno</label>
-                <select 
-                  className="w-full px-4 py-3 bg-slate-50 text-black border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all text-sm font-medium"
+                <SearchableSelect
+                  label="Aluno"
+                  placeholder="Selecione ou digite o nome do aluno..."
                   value={absenceStudentId}
-                  onChange={(e) => setAbsenceStudentId(e.target.value)}
-                >
-                  <option value="">Selecione o aluno...</option>
-                  {data.students
+                  onChange={(val) => setAbsenceStudentId(val)}
+                  options={data.students
                     .filter(s => s.status === 'active')
                     .sort((a, b) => a.name.localeCompare(b.name))
-                    .map(student => (
-                    <option key={student.id} value={student.id}>{student.name}</option>
-                  ))}
-                </select>
+                    .map(student => ({ id: student.id, name: student.name }))}
+                />
               </div>
 
               <div>

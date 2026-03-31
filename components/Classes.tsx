@@ -207,8 +207,22 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Professor Responsável</label>
-                <input required className={inputClass} 
-                  value={formData.teacher} onChange={e => setFormData({...formData, teacher: e.target.value})} />
+                <select required className={inputClass}
+                  value={formData.teacher} onChange={e => setFormData({...formData, teacher: e.target.value})}>
+                  <option value="">Selecione um professor...</option>
+                  {(data.employees || [])
+                    .filter(e => {
+                      const catName = (data.employeeCategories || []).find(c => c.id === e.categoryId)?.name?.toLowerCase() || '';
+                      return catName.includes('professor') || catName.includes('prof');
+                    })
+                    .map(emp => (
+                      <option key={emp.id} value={emp.name}>{emp.name}</option>
+                    ))}
+                  {/* Se já houver um professor na turma e ele não for da listagem, mantê-lo visível no select */}
+                  {formData.teacher && !(data.employees || []).some(e => e.name === formData.teacher) && (
+                    <option value={formData.teacher}>{formData.teacher} (Manual)</option>
+                  )}
+                </select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

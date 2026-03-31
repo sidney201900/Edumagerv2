@@ -428,6 +428,7 @@ export const pdfService = {
       return y + 6;
     };
 
+    currentY = drawField('Nº Matrícula', student.enrollmentNumber || 'Não gerado', currentY);
     currentY = drawField('Nome', student.name, currentY);
     currentY = drawField('CPF', student.cpf, currentY);
     currentY = drawField('RG', student.rg, currentY);
