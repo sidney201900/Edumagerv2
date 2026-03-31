@@ -1,0 +1,347 @@
+import React, { useState } from 'react';
+import { SchoolData, Class, Lesson, Notification } from '../types';
+import { useDialog } from '../DialogContext';
+import { Calendar, Plus, X, AlertCircle, RefreshCw, Send, CheckCircle, Search } from 'lucide-react';
+import { dbService } from '../services/dbService';
+
+interface LessonScheduleProps {
+  classObj: Class;
+  data: SchoolData;
+  updateData: (newData: Partial<SchoolData>) => void;
+  onClose: () => void;
+}
+
+const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateData, onClose }) => {
+  const { showAlert, showConfirm } = useDialog();
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [showLessonDetail, setShowLessonDetail] = useState<Lesson | null>(null);
+  const [isClosing, setIsClosing] = useState(false);
+
+  // Form states for generation
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  // Days of week (0=Sun, 1=Mon, ..., 6=Sat)
+  const [dayOfWeek, setDayOfWeek] = useState('1'); 
+
+  // Form states for cancellation
+  const [cancelReason, setCancelReason] = useState('');
+  const [wantReplacement, setWantReplacement] = useState(false);
+  const [replacementDate, setReplacementDate] = useState('');
+
+  const classLessons = (data.lessons || [])
+    .filter(l => l.classId === classObj.id)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  const handleGenerateLessons = () => {
+    if (!startDate || !endDate || !dayOfWeek) {
+      showAlert('Atenção', 'Preencha todos os campos.', 'warning');
+      return;
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const day = parseInt(dayOfWeek, 10);
+    const newLessons: Lesson[] = [];
+
+    // Increment date until finding the exact day
+    let current = new Date(start);
+    while (current.getUTCDay() !== day) {
+      current.setUTCDate(current.getUTCDate() + 1);
+    }
+
+    while (current <= end) {
+      newLessons.push({
+        id: crypto.randomUUID(),
+        classId: classObj.id,
+        date: current.toISOString().split('T')[0],
+        status: 'scheduled',
+        type: 'regular'
+      });
+      current.setUTCDate(current.getUTCDate() + 7); // advance one week
+    }
+
+    if (newLessons.length === 0) {
+      showAlert('Atenção', 'Nenhuma data encontrada nesse período para o dia da semana selecionado.', 'warning');
+      return;
+    }
+
+    const updatedLessons = [...(data.lessons || []), ...newLessons];
+    updateData({ lessons: updatedLessons });
+    dbService.saveData({ ...data, lessons: updatedLessons });
+
+    setShowGenerateModal(false);
+    showAlert('Sucesso', `${newLessons.length} aulas geradas com sucesso!`, 'success');
+  };
+
+  const handleCancelLesson = async (lesson: Lesson) => {
+    if (!cancelReason) {
+      showAlert('Atenção', 'Informe o motivo do cancelamento.', 'warning');
+      return;
+    }
+    if (wantReplacement && !replacementDate) {
+      showAlert('Atenção', 'Informe a data de reposição.', 'warning');
+      return;
+    }
+
+    setIsClosing(true);
+
+    const updatedLessons: Lesson[] = (data.lessons || []).map(l => 
+      l.id === lesson.id ? { ...l, status: 'cancelled', cancelReason } : l
+    );
+
+    if (wantReplacement && replacementDate) {
+      updatedLessons.push({
+        id: crypto.randomUUID(),
+        classId: classObj.id,
+        date: replacementDate,
+        status: 'scheduled',
+        type: 'reposicao',
+        originalLessonId: lesson.id
+      });
+    }
+
+    // Gerar notificações para os alunos da turma (para o Portal do Aluno)
+    const students = data.students.filter(s => s.status === 'active' && s.classId === classObj.id);
+    const newNotifs: Notification[] = students.map(s => ({
+      id: crypto.randomUUID(),
+      studentId: s.id,
+      title: 'Aula Cancelada',
+      message: `A aula do dia ${new Date(lesson.date).toLocaleDateString('pt-BR')} foi cancelada. Motivo: ${cancelReason}. ${wantReplacement ? `Uma reposição foi agendada para o dia ${new Date(replacementDate).toLocaleDateString('pt-BR')}.` : ''}`,
+      read: false,
+      createdAt: new Date().toISOString()
+    }));
+
+    const updatedNotifications = [...(data.notifications || []), ...newNotifs];
+
+    updateData({ lessons: updatedLessons, notifications: updatedNotifications });
+    await dbService.saveData({ ...data, lessons: updatedLessons, notifications: updatedNotifications });
+
+    // Notificar via Whatsapp (Integração existente no backend)
+    try {
+      const payloadAlunos = students.map(s => ({
+        nome: s.name,
+        telefone: s.phone,
+        nome_responsavel: s.guardianName,
+        telefone_responsavel: s.guardianPhone
+      }));
+
+      const msgWa = `🚨 *Aviso Importante: Aula Cancelada*\n\nOlá, {nome}!\nInformamos que a aula da turma *${classObj.name}* programada para o dia *${new Date(lesson.date).toLocaleDateString('pt-BR')}* foi cancelada.\n\n*Motivo:* ${cancelReason}\n${wantReplacement ? `\n✅ *Reposição agendada para o dia:* ${new Date(replacementDate).toLocaleDateString('pt-BR')}` : ''}\n\nAgradecemos a compreensão.`;
+
+      fetch('/api/enviar-massa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alunos: payloadAlunos, mensagem: msgWa })
+      });
+    } catch (e) {
+      console.warn("Falha silenciosa ao chamar /api/enviar-massa", e);
+    }
+
+    setTimeout(() => {
+      setShowLessonDetail(null);
+      setIsClosing(false);
+      setCancelReason('');
+      setWantReplacement(false);
+      setReplacementDate('');
+      showAlert('Sucesso', 'Aula cancelada e notificações enviadas aos alunos.', 'success');
+    }, 400);
+  };
+
+  const closeLessonDetail = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setShowLessonDetail(null);
+      setIsClosing(false);
+      setCancelReason('');
+      setWantReplacement(false);
+      setReplacementDate('');
+    }, 400);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in">
+      <div className="bg-slate-50 rounded-2xl w-full max-w-4xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
+        
+        {/* Header */}
+        <div className="p-6 border-b border-slate-200 bg-white flex justify-between items-center z-10 sticky top-0">
+          <div>
+            <h3 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+              <Calendar className="text-indigo-600" /> Cronograma de Aulas
+            </h3>
+            <p className="text-sm text-slate-500 font-medium">Turma: {classObj.name}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setShowGenerateModal(true)}
+              className="px-4 py-2 bg-indigo-100 text-indigo-700 font-bold rounded-xl hover:bg-indigo-200 transition-colors flex items-center gap-2"
+            >
+              <Plus size={18} /> Gerar Aulas do Ano
+            </button>
+            <button onClick={onClose} className="p-2 bg-slate-100 text-slate-500 hover:text-red-500 rounded-xl transition-all">
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 overflow-y-auto flex-1">
+          {classLessons.length === 0 ? (
+            <div className="py-20 text-center text-slate-400">
+              <Calendar size={64} className="mx-auto mb-4 opacity-20" />
+              <p className="font-bold text-xl">Nenhuma aula gerada ainda.</p>
+              <p className="text-sm mt-2">Clique em "Gerar Aulas do Ano" para preencher o cronograma.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {classLessons.map(lesson => {
+                const dateObj = new Date(lesson.date);
+                // Adjusting for timezone to correctly display the UTC date visually since input type date returns YYYY-MM-DD
+                const displayDate = new Date(dateObj.getTime() + dateObj.getTimezoneOffset() * 60000);
+                const isCancelled = lesson.status === 'cancelled';
+                const isReposicao = lesson.type === 'reposicao';
+
+                return (
+                  <div 
+                    key={lesson.id}
+                    onClick={() => setShowLessonDetail(lesson)}
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all hover:scale-105 ${
+                      isCancelled 
+                        ? 'bg-red-50 border-red-200 opacity-80' 
+                        : isReposicao
+                        ? 'bg-emerald-50 border-emerald-200'
+                        : 'bg-white border-slate-200 hover:border-indigo-300'
+                    }`}
+                  >
+                    <div className="text-center">
+                      <p className={`text-2xl font-black mb-1 ${isCancelled ? 'text-red-600 line-through' : 'text-slate-800'}`}>
+                        {displayDate.getDate().toString().padStart(2, '0')}
+                      </p>
+                      <p className={`text-[10px] uppercase font-bold tracking-widest ${isCancelled ? 'text-red-400' : 'text-slate-400'}`}>
+                        {displayDate.toLocaleString('pt-BR', { month: 'short' })}
+                      </p>
+                      {isCancelled && (
+                        <span className="inline-block mt-2 px-2 py-0.5 bg-red-100 text-red-700 text-[9px] font-black uppercase rounded-full">
+                          Cancelada
+                        </span>
+                      )}
+                      {isReposicao && !isCancelled && (
+                        <span className="inline-block mt-2 px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[9px] font-black uppercase rounded-full">
+                          Reposição
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Generate Lessons Modal */}
+      {showGenerateModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in-95">
+            <h3 className="text-xl font-black text-slate-800 mb-4">Gerar Aulas em Massa</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase">Data Início</label>
+                <input type="date" className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm" 
+                  value={startDate} onChange={e => setStartDate(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase">Data Fim</label>
+                <input type="date" className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm" 
+                  value={endDate} onChange={e => setEndDate(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase">Dia da Semana</label>
+                <select className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm"
+                  value={dayOfWeek} onChange={e => setDayOfWeek(e.target.value)}>
+                  <option value="0">Domingo</option>
+                  <option value="1">Segunda-feira</option>
+                  <option value="2">Terça-feira</option>
+                  <option value="3">Quarta-feira</option>
+                  <option value="4">Quinta-feira</option>
+                  <option value="5">Sexta-feira</option>
+                  <option value="6">Sábado</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-slate-100">
+                <button onClick={() => setShowGenerateModal(false)} className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-lg transition-colors">Cancelar</button>
+                <button onClick={handleGenerateLessons} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors">Gerar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lesson Details & Cancellation Modal */}
+      {showLessonDetail && (
+        <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
+          <div className={`bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl transition-all duration-400 ${isClosing ? 'animate-slide-down-fade-out' : 'animate-slide-up'}`}>
+            <div className={`p-6 border-b flex justify-between items-center ${showLessonDetail.status === 'cancelled' ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
+              <h3 className="text-xl font-black text-slate-800">Detalhes da Aula</h3>
+              <button onClick={closeLessonDetail} className="text-slate-400 hover:text-red-500 transition-colors"><X size={20}/></button>
+            </div>
+
+            <div className="p-6">
+              <p className="text-sm font-bold text-slate-500 mb-1">Data Agendada</p>
+              <p className="text-2xl font-black text-slate-800 mb-6">
+                {new Date(showLessonDetail.date + 'T12:00:00Z').toLocaleDateString('pt-BR')}
+              </p>
+
+              {showLessonDetail.status === 'cancelled' ? (
+                <div className="p-4 bg-red-50 rounded-xl border border-red-100 text-red-800">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle size={18} /> <span className="font-bold">Aula Cancelada</span>
+                  </div>
+                  <p className="text-sm"><strong>Motivo:</strong> {showLessonDetail.cancelReason}</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-red-500 uppercase tracking-widest mb-1">Motivo do Cancelamento</label>
+                    <textarea 
+                      className="w-full p-3 bg-red-50 border border-red-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 text-sm placeholder-red-300"
+                      placeholder="Ex: Doença do professor..."
+                      value={cancelReason}
+                      onChange={e => setCancelReason(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input type="checkbox" className="w-4 h-4 text-indigo-600 rounded"
+                        checked={wantReplacement} onChange={e => setWantReplacement(e.target.checked)} />
+                      <span className="text-sm font-bold text-slate-700">Deseja agendar reposição agora?</span>
+                    </label>
+                    
+                    {wantReplacement && (
+                      <div className="mt-4 animate-in fade-in slide-in-from-top-2">
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Data da Reposição</label>
+                        <input type="date" className="w-full p-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                          value={replacementDate} onChange={e => setReplacementDate(e.target.value)} />
+                      </div>
+                    )}
+                  </div>
+
+                  <button 
+                    onClick={() => handleCancelLesson(showLessonDetail)}
+                    className="w-full py-4 bg-red-500 text-white rounded-xl font-black flex items-center justify-center gap-2 hover:bg-red-600 transition-colors shadow-lg shadow-red-200"
+                  >
+                    <AlertCircle size={20} /> Cancelar Aula e Notificar
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default LessonSchedule;

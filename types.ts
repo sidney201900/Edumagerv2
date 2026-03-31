@@ -62,6 +62,25 @@ export interface Class {
   maxStudents: number;
 }
 
+export interface Lesson {
+  id: string;
+  classId: string;
+  date: string; // ISO Date YYYY-MM-DD
+  status: 'scheduled' | 'cancelled' | 'completed';
+  type: 'regular' | 'reposicao';
+  cancelReason?: string;
+  originalLessonId?: string; // Se type === 'reposicao'
+}
+
+export interface Notification {
+  id: string;
+  studentId: string;
+  title: string;
+  message: string;
+  read: boolean;
+  createdAt: string; // ISO string
+}
+
 export interface Payment {
   id: string;
   studentId: string;
@@ -222,6 +241,8 @@ export interface SchoolData {
   handoutDeliveries?: HandoutDelivery[];
   employees?: Employee[];
   employeeCategories?: EmployeeCategory[];
+  lessons?: Lesson[];
+  notifications?: Notification[];
   profiles: SchoolProfile[];
   profile: SchoolProfile;
   logo?: string;

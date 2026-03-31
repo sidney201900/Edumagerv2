@@ -69,6 +69,12 @@ const Dashboard: React.FC<DashboardProps> = ({ data }) => {
     return Math.round(total / data.payments.length);
   }, [data.payments]);
 
+  const aulasARepor = useMemo(() => {
+    if (!data.lessons) return 0;
+    const cancelled = data.lessons.filter(l => l.status === 'cancelled');
+    return cancelled.filter(c => !data.lessons!.some(l => l.originalLessonId === c.id)).length;
+  }, [data.lessons]);
+
   // Chart Data: Class Occupancy
   const classOccupancy = useMemo(() => data.classes.map(c => ({
     name: c.name,
@@ -145,6 +151,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data }) => {
   ];
 
   const secondaryStats = [
+    { label: 'Aulas a Repor', value: aulasARepor, icon: Calendar, color: 'text-red-600' },
     { label: 'Novos Alunos (Mês)', value: newStudentsThisMonth, icon: UserPlus, color: 'text-sky-600' },
     { label: 'Pagamentos Pendentes', value: pendingPayments, icon: Clock, color: 'text-amber-600' },
     { label: 'Ticket Médio', value: `R$ ${averagePaymentValue}`, icon: Wallet, color: 'text-slate-600' },
@@ -208,7 +215,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data }) => {
       </div>
 
       {/* Secondary Stats Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {secondaryStats.map((stat, i) => (
           <div key={i} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center justify-between">
             <div className="flex items-center gap-3">

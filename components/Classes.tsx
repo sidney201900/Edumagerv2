@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { SchoolData, Class } from '../types';
 import { useDialog } from '../DialogContext';
-import { Plus, Edit2, Trash2, X, Clock, User, Book, GraduationCap, Printer, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Clock, User, Book, GraduationCap, Printer, AlertTriangle, RefreshCw, Calendar } from 'lucide-react';
 import { pdfService } from '../services/pdfService';
+import LessonSchedule from './LessonSchedule';
 
 interface ClassesProps {
   data: SchoolData;
@@ -15,6 +16,7 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
   const [isClosing, setIsClosing] = useState(false);
   const [editingClass, setEditingClass] = useState<Class | null>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState<string | null>(null);
+  const [scheduleClass, setScheduleClass] = useState<Class | null>(null); // For LessonSchedule component
   
   const [formData, setFormData] = useState<Omit<Class, 'id'>>({
     name: '',
@@ -110,6 +112,13 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
                   <span className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em]">{course?.name || 'Sem Curso Vinculado'}</span>
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button 
+                    onClick={() => setScheduleClass(cls)}
+                    className="p-2 text-indigo-500 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-lg transition-all" 
+                    title="Cronograma de Aulas"
+                  >
+                    <Calendar size={16} />
+                  </button>
                   <button 
                     onClick={() => handleDownloadClassList(cls)} 
                     disabled={isGeneratingPDF === cls.id}
@@ -247,6 +256,16 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Lesson Schedule Modal */}
+      {scheduleClass && (
+        <LessonSchedule 
+          classObj={scheduleClass} 
+          data={data} 
+          updateData={updateData} 
+          onClose={() => setScheduleClass(null)} 
+        />
       )}
     </div>
   );
