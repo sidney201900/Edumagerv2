@@ -369,43 +369,43 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
         <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
         
         {/* Header */}
-        <div className="p-6 border-b border-slate-200 bg-white flex justify-between items-center z-10 sticky top-0">
-          <div>
+        <div className="p-4 md:p-6 border-b border-slate-200 bg-white flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 z-10 sticky top-0">
+          <button onClick={onClose} className="absolute top-4 right-4 md:top-6 md:right-6 p-2 bg-slate-100 text-slate-500 hover:text-red-500 rounded-xl transition-all">
+            <X size={20} />
+          </button>
+          <div className="pr-12">
             <h3 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
               <Calendar className="text-indigo-600" /> Cronograma de Aulas
             </h3>
             <p className="text-sm text-slate-500 font-medium">Turma: {classObj.name}</p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
             <button 
               onClick={handleDeleteAllSchedule}
-              className="px-4 py-2 bg-red-500 text-white font-bold rounded-xl hover:bg-red-600 transition-colors flex items-center gap-2 shadow-sm"
+              className="px-3 py-1.5 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600 transition-colors flex items-center gap-1.5 shadow-sm text-xs md:text-sm"
               title="Exclui todo o cronograma permanentemente"
             >
-              <Trash2 size={18} /> Excluir Cronograma
+              <Trash2 size={16} /> Excluir Tudo
             </button>
             <button 
               onClick={handleCancelAllFuture}
-              className="px-4 py-2 bg-red-100 text-red-700 font-bold rounded-xl hover:bg-red-200 transition-colors flex items-center gap-2"
+              className="px-3 py-1.5 bg-red-100 text-red-700 font-bold rounded-lg hover:bg-red-200 transition-colors flex items-center gap-1.5 text-xs md:text-sm"
               title="Cancela todas as próximas aulas da turma"
             >
-              <AlertCircle size={18} /> Cancelar Todas
+              <AlertCircle size={16} /> Cancelar Todas
             </button>
             <button 
               onClick={handleUncancelAllFuture}
-              className="px-4 py-2 bg-emerald-100 text-emerald-700 font-bold rounded-xl hover:bg-emerald-200 transition-colors flex items-center gap-2"
+              className="px-3 py-1.5 bg-emerald-100 text-emerald-700 font-bold rounded-lg hover:bg-emerald-200 transition-colors flex items-center gap-1.5 text-xs md:text-sm"
               title="Reativa todas as próximas aulas canceladas"
             >
-              <RefreshCw size={18} /> Reativar Todas
+              <RefreshCw size={16} /> Reativar Todas
             </button>
             <button 
               onClick={() => setShowGenerateModal(true)}
-              className="px-4 py-2 bg-indigo-100 text-indigo-700 font-bold rounded-xl hover:bg-indigo-200 transition-colors flex items-center gap-2"
+              className="px-3 py-1.5 bg-indigo-100 text-indigo-700 font-bold rounded-lg hover:bg-indigo-200 transition-colors flex items-center gap-1.5 text-xs md:text-sm"
             >
-              <Plus size={18} /> Adicionar Aula Extra
-            </button>
-            <button onClick={onClose} className="p-2 bg-slate-100 text-slate-500 hover:text-red-500 rounded-xl transition-all">
-              <X size={20} />
+              <Plus size={16} /> Adicionar Extra
             </button>
           </div>
         </div>
