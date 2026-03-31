@@ -286,7 +286,7 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
 
     setIsClosing(true);
     const updatedLessons: Lesson[] = (data.lessons || []).map(l => 
-      l.id === lesson.id ? { ...l, date: replacementDate, startTime: replacementStartTime, endTime: replacementEndTime, status: 'scheduled', cancelReason: undefined } : l
+      l.id === lesson.id ? { ...l, date: replacementDate, startTime: replacementStartTime, endTime: replacementEndTime, status: 'rescheduled', cancelReason: undefined } : l
     );
 
     const oldDateStr = new Date(lesson.date + 'T12:00:00Z').toLocaleDateString('pt-BR');
@@ -425,6 +425,7 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
                 // Adjusting for timezone to correctly display the UTC date visually since input type date returns YYYY-MM-DD
                 const displayDate = new Date(dateObj.getTime() + dateObj.getTimezoneOffset() * 60000);
                 const isCancelled = lesson.status === 'cancelled';
+                const isRescheduled = lesson.status === 'rescheduled';
                 const isReposicao = lesson.type === 'reposicao';
 
                 return (
@@ -434,6 +435,8 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
                     className={`p-4 rounded-xl border-2 cursor-pointer transition-all hover:scale-105 ${
                       isCancelled 
                         ? 'bg-red-50 border-red-200 opacity-80' 
+                        : isRescheduled
+                        ? 'bg-orange-50 border-orange-300 shadow-sm'
                         : isReposicao
                         ? 'bg-emerald-50 border-emerald-200'
                         : 'bg-white border-slate-200 hover:border-indigo-300'
@@ -454,6 +457,11 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
                       {isCancelled && (
                         <span className="inline-block mt-2 px-2 py-0.5 bg-red-100 text-red-700 text-[9px] font-black uppercase rounded-full">
                           Cancelada
+                        </span>
+                      )}
+                      {isRescheduled && !isCancelled && !isReposicao && (
+                        <span className="inline-block mt-2 px-2 py-0.5 bg-orange-100 text-orange-700 text-[9px] font-black uppercase rounded-full">
+                          Reagendada
                         </span>
                       )}
                       {isReposicao && !isCancelled && (
