@@ -71,43 +71,36 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
 
     let updatedLessons = [...(data.lessons || [])];
 
-    // Gerar cronograma automaticamente (novo ou atualizar/completar o editado)
+    // Gerar cronograma automaticamente
     if (newClass.startDate && newClass.endDate && newClass.scheduleDay && newClass.defaultStartTime && newClass.defaultEndTime) {
+      
+      // Se editando, REMOVE todo o cronograma antigo desta turma para recriar
+      if (editingClass) {
+        updatedLessons = updatedLessons.filter(l => l.classId !== newClass.id);
+      }
+
       const generatedLessons = [];
       let currentDate = new Date(newClass.startDate + 'T12:00:00Z');
       const endObject = new Date(newClass.endDate + 'T12:00:00Z');
       const targetDay = parseInt(newClass.scheduleDay);
 
+      // Avançar até o primeiro dia da semana alvo a partir da data de início (nunca para trás)
       while (currentDate.getUTCDay() !== targetDay) {
         currentDate.setUTCDate(currentDate.getUTCDate() + 1);
       }
 
       while (currentDate <= endObject) {
          const dateString = currentDate.toISOString().split('T')[0];
-         const exists = updatedLessons.some(l => l.classId === newClass.id && l.date === dateString);
-         if (!exists) {
-            generatedLessons.push({
-               id: crypto.randomUUID(),
-               classId: newClass.id,
-               date: dateString,
-               startTime: newClass.defaultStartTime,
-               endTime: newClass.defaultEndTime,
-               status: 'scheduled',
-               type: 'regular'
-            });
-         }
-         currentDate.setUTCDate(currentDate.getUTCDate() + 7);
-      }
-
-      // Se editando, também atualiza o horário das aulas futuras programadas
-      if (editingClass) {
-         const today = new Date().toISOString().split('T')[0];
-         updatedLessons = updatedLessons.map(l => {
-           if (l.classId === newClass.id && l.status === 'scheduled' && l.date >= today) {
-              return { ...l, startTime: newClass.defaultStartTime, endTime: newClass.defaultEndTime };
-           }
-           return l;
+         generatedLessons.push({
+            id: crypto.randomUUID(),
+            classId: newClass.id,
+            date: dateString,
+            startTime: newClass.defaultStartTime,
+            endTime: newClass.defaultEndTime,
+            status: 'scheduled',
+            type: 'regular'
          });
+         currentDate.setUTCDate(currentDate.getUTCDate() + 7);
       }
 
       updatedLessons = [...updatedLessons, ...generatedLessons];

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SchoolData, Class, Lesson, Notification } from '../types';
 import { useDialog } from '../DialogContext';
-import { Calendar, Plus, X, AlertCircle, RefreshCw, Send, CheckCircle, Search, Clock } from 'lucide-react';
+import { Calendar, Plus, X, AlertCircle, RefreshCw, Send, CheckCircle, Search, Clock, Trash2 } from 'lucide-react';
 import { dbService } from '../services/dbService';
 
 interface LessonScheduleProps {
@@ -67,6 +67,13 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
 
     if (startTime >= endTime) {
       showAlert('Atenção', 'O horário de término deve ser maior que o de início.', 'warning');
+      return;
+    }
+
+    // Só pode gerar a partir da data de início da turma (nunca para trás)
+    const turmaStartDate = classObj.startDate || '';
+    if (turmaStartDate && startDate < turmaStartDate) {
+      showAlert('Atenção', `A data de início não pode ser anterior à data de início da turma (${new Date(turmaStartDate + 'T12:00:00Z').toLocaleDateString('pt-BR')}).`, 'warning');
       return;
     }
 
@@ -321,6 +328,15 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
     });
   };
 
+  const handleDeleteAllSchedule = () => {
+    showConfirm('Excluir Cronograma Completo', '⚠️ Tem certeza? Isso removerá TODAS as aulas desta turma permanentemente (agendadas, canceladas e reposições). Esta ação NÃO pode ser desfeita.', async () => {
+      const updatedLessons = (data.lessons || []).filter(l => l.classId !== classObj.id);
+      updateData({ lessons: updatedLessons });
+      await dbService.saveData({ ...data, lessons: updatedLessons });
+      showAlert('Sucesso', 'Cronograma completo excluído.', 'success');
+    });
+  };
+
   const closeLessonDetail = () => {
     setIsClosing(true);
     setTimeout(() => {
@@ -347,7 +363,14 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
             </h3>
             <p className="text-sm text-slate-500 font-medium">Turma: {classObj.name}</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button 
+              onClick={handleDeleteAllSchedule}
+              className="px-4 py-2 bg-red-500 text-white font-bold rounded-xl hover:bg-red-600 transition-colors flex items-center gap-2 shadow-sm"
+              title="Exclui todo o cronograma permanentemente"
+            >
+              <Trash2 size={18} /> Excluir Cronograma
+            </button>
             <button 
               onClick={handleCancelAllFuture}
               className="px-4 py-2 bg-red-100 text-red-700 font-bold rounded-xl hover:bg-red-200 transition-colors flex items-center gap-2"
@@ -404,11 +427,11 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
                     }`}
                   >
                     <div className="text-center">
-                      <p className={`text-2xl font-black mb-1 ${isCancelled ? 'text-red-600 line-through' : 'text-slate-800'}`}>
+                      <p className={`text-2xl font-black mb-0 ${isCancelled ? 'text-red-600 line-through' : 'text-slate-800'}`}>
                         {displayDate.getDate().toString().padStart(2, '0')}
                       </p>
                       <p className={`text-[10px] uppercase font-bold tracking-widest ${isCancelled ? 'text-red-400' : 'text-slate-400'}`}>
-                        {displayDate.toLocaleString('pt-BR', { month: 'short' })}
+                        {displayDate.toLocaleString('pt-BR', { month: 'short' })} {displayDate.getFullYear()}
                       </p>
                       {lesson.startTime && lesson.endTime && (
                         <p className={`text-[9px] font-black tracking-wider mt-1 ${isCancelled ? 'text-red-400' : 'text-indigo-500'}`}>
