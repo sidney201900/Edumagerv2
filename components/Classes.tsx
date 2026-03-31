@@ -38,20 +38,19 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
   const [quickStartTime, setQuickStartTime] = useState('');
   const [quickEndTime, setQuickEndTime] = useState('');
 
-  // Auto-calculate end date
+  // Auto-calculate end date based on course durationMonths
   React.useEffect(() => {
-    if (formData.courseId && formData.startDate && !editingClass) {
+    if (formData.courseId && formData.startDate) {
       const course = data.courses.find(c => c.id === formData.courseId);
       if (course && course.durationMonths) {
-        const start = new Date(formData.startDate);
+        const start = new Date(formData.startDate + 'T12:00:00Z');
         const end = new Date(start);
         end.setUTCMonth(end.getUTCMonth() + course.durationMonths);
         const endString = end.toISOString().split('T')[0];
-        // Somente seta se estiver vazio ou quisermos sobrescrever silenciosamente (melhor só sobrescrever se não tiver sido editado)
         setFormData(prev => ({ ...prev, endDate: endString }));
       }
     }
-  }, [formData.courseId, formData.startDate, data.courses, editingClass]);
+  }, [formData.courseId, formData.startDate, data.courses]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
