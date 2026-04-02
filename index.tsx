@@ -213,7 +213,7 @@ const App = () => {
         )}
 
         <div className="max-w-7xl mx-auto p-4 md:p-8">
-          <AdminNotifications data={data} updateData={updateData} />
+          <AdminNotifications data={data} updateData={updateData} setView={setCurrentView} />
           {renderView()}
         </div>
       </main>

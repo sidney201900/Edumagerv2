@@ -1,18 +1,29 @@
 import React, { useState } from 'react';
 import { Bell, X, CheckCircle, Trash2 } from 'lucide-react';
-import { SchoolData, Notification } from '../types';
+import { SchoolData, Notification, View } from '../types';
 import { dbService } from '../services/dbService';
 
 interface Props {
   data: SchoolData;
   updateData: (newData: Partial<SchoolData>) => void;
+  setView: (view: View) => void;
 }
 
-const AdminNotifications: React.FC<Props> = ({ data, updateData }) => {
+const AdminNotifications: React.FC<Props> = ({ data, updateData, setView }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const adminNotifs = (data.notifications || []).filter(n => n.studentId === 'admin').sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const unreadCount = adminNotifs.filter(n => !n.read).length;
+
+  const handleAction = (notif: Notification) => {
+    if (!notif.read) handleMarkAsRead(notif.id);
+    
+    // Se for uma notificação de justificativa ou frequência, leva para a tela de frequência
+    if (notif.title.toLowerCase().includes('justificativa') || notif.message.toLowerCase().includes('justificativa')) {
+      setView(View.AttendanceQuery);
+      setIsOpen(false);
+    }
+  };
 
   const handleMarkAsRead = (id: string) => {
     const updatedAll = (data.notifications || []).map(n => 
@@ -71,7 +82,7 @@ const AdminNotifications: React.FC<Props> = ({ data, updateData }) => {
             ) : (
               <div className="space-y-2">
                 {adminNotifs.map(notif => (
-                  <div key={notif.id} onClick={() => !notif.read && handleMarkAsRead(notif.id)} className={`p-3 rounded-xl border transition-all cursor-pointer relative overflow-hidden group ${notif.read ? 'bg-slate-50 border-transparent opacity-70' : 'bg-white border-indigo-100 hover:border-indigo-300 shadow-sm'}`}>
+                  <div key={notif.id} onClick={() => handleAction(notif)} className={`p-3 rounded-xl border transition-all cursor-pointer relative overflow-hidden group ${notif.read ? 'bg-slate-50 border-transparent opacity-70' : 'bg-white border-indigo-100 hover:border-indigo-300 shadow-sm'}`}>
                     {!notif.read && <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500"></div>}
                     <div className="flex justify-between items-start mb-1 gap-4">
                       <h4 className={`text-sm font-bold ${notif.read ? 'text-slate-600' : 'text-slate-900'}`}>{notif.title}</h4>

@@ -422,10 +422,22 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
               {classLessons.map(lesson => {
                 const dateObj = new Date(lesson.date);
-                // Adjusting for timezone to correctly display the UTC date visually since input type date returns YYYY-MM-DD
                 const displayDate = new Date(dateObj.getTime() + dateObj.getTimezoneOffset() * 60000);
+                
+                const now = new Date();
+                const [startH, startM] = (lesson.startTime || "00:00").split(':').map(Number);
+                const [endH, endM] = (lesson.endTime || "23:59").split(':').map(Number);
+                
+                const lessonStart = new Date(displayDate);
+                lessonStart.setHours(startH, startM, 0);
+                
+                const lessonEnd = new Date(displayDate);
+                lessonEnd.setHours(endH, endM, 0);
+
                 const isCancelled = lesson.status === 'cancelled';
                 const isRescheduled = lesson.status === 'rescheduled';
+                const isCompletedStatus = lesson.status === 'completed' || (now > lessonEnd && !isCancelled);
+                const isInProgress = !isCancelled && now >= lessonStart && now <= lessonEnd;
                 const isReposicao = lesson.type === 'reposicao';
 
                 return (
@@ -435,6 +447,10 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
                     className={`p-4 rounded-xl border-2 cursor-pointer transition-all hover:scale-105 ${
                       isCancelled 
                         ? 'bg-red-50 border-red-200 opacity-80' 
+                        : isInProgress
+                        ? 'bg-indigo-50 border-indigo-400 shadow-indigo-100 shadow-lg'
+                        : isCompletedStatus
+                        ? 'bg-slate-50 border-slate-200 opacity-70'
                         : isRescheduled
                         ? 'bg-orange-50 border-orange-300 shadow-sm'
                         : isReposicao
@@ -450,25 +466,37 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
                         {displayDate.toLocaleString('pt-BR', { month: 'short' })} {displayDate.getFullYear()}
                       </p>
                       {lesson.startTime && lesson.endTime && (
-                        <p className={`text-[9px] font-black tracking-wider mt-1 ${isCancelled ? 'text-red-400' : 'text-indigo-500'}`}>
+                        <p className={`text-[9px] font-black tracking-wider mt-1 ${isCancelled ? 'text-red-400' : isInProgress ? 'text-indigo-600' : 'text-indigo-500'}`}>
                           {lesson.startTime} - {lesson.endTime}
                         </p>
                       )}
-                      {isCancelled && (
-                        <span className="inline-block mt-2 px-2 py-0.5 bg-red-100 text-red-700 text-[9px] font-black uppercase rounded-full">
-                          Cancelada
-                        </span>
-                      )}
-                      {isRescheduled && !isCancelled && !isReposicao && (
-                        <span className="inline-block mt-2 px-2 py-0.5 bg-orange-100 text-orange-700 text-[9px] font-black uppercase rounded-full">
-                          Reagendada
-                        </span>
-                      )}
-                      {isReposicao && !isCancelled && (
-                        <span className="inline-block mt-2 px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[9px] font-black uppercase rounded-full">
-                          Reposição
-                        </span>
-                      )}
+                      <div className="flex flex-wrap justify-center gap-1 mt-2">
+                        {isCancelled && (
+                          <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[9px] font-black uppercase rounded-full">
+                            Cancelada
+                          </span>
+                        )}
+                        {isInProgress && (
+                          <span className="px-2 py-0.5 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-full animate-pulse flex items-center gap-1">
+                            <Clock size={8} /> Ao Vivo
+                          </span>
+                        )}
+                        {isCompletedStatus && !isCancelled && (
+                          <span className="px-2 py-0.5 bg-slate-200 text-slate-600 text-[9px] font-black uppercase rounded-full">
+                            Concluída
+                          </span>
+                        )}
+                        {isRescheduled && !isCancelled && !isReposicao && !isInProgress && !isCompletedStatus && (
+                          <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-[9px] font-black uppercase rounded-full">
+                            Reagendada
+                          </span>
+                        )}
+                        {isReposicao && !isCancelled && (
+                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[9px] font-black uppercase rounded-full">
+                            Reposição
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
