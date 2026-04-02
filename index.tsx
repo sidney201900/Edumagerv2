@@ -19,6 +19,7 @@ import UserManagement from './components/UserManagement';
 import Handouts from './components/Handouts';
 import Employees from './components/Employees';
 import Messages from './components/Messages';
+import AdminNotifications from './components/AdminNotifications';
 import { Cloud, CloudOff, RefreshCw, AlertCircle } from 'lucide-react';
 import { isSupabaseConfigured } from './services/supabase';
 import { DialogProvider } from './DialogContext';
@@ -212,6 +213,7 @@ const App = () => {
         )}
 
         <div className="max-w-7xl mx-auto p-4 md:p-8">
+          <AdminNotifications data={data} updateData={updateData} />
           {renderView()}
         </div>
       </main>

@@ -86,12 +86,19 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData }) =
       const tableData = classAttendance.map(record => {
         const student = data.students.find(s => s.id === record.studentId);
         const time = new Date(record.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        let justMotivo = record.justification || '-';
+        if (justMotivo.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(justMotivo);
+            justMotivo = parsed.motivo || justMotivo;
+          } catch(e) {}
+        }
         
         return [
           student?.name || 'Desconhecido',
           time,
           record.type === 'absence' ? 'Falta Justificada' : 'Presente',
-          record.justification || '-'
+          justMotivo
         ];
       });
 
@@ -212,8 +219,18 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData }) =
                   const student = data.students.find(s => s.id === record.studentId);
                   const time = new Date(record.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                   
+                  let justMotivo = record.justification;
+                  let justAttachment = null;
+                  if (record.justification && record.justification.startsWith('{')) {
+                    try {
+                      const parsed = JSON.parse(record.justification);
+                      justMotivo = parsed.motivo || record.justification;
+                      justAttachment = parsed.arquivo_base64 || null;
+                    } catch(e) {}
+                  }
+
                   return (
-                    <div key={record.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div key={record.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 gap-4">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-lg bg-slate-200 overflow-hidden border border-slate-200 flex-shrink-0">
                           {record.photo ? (
@@ -243,7 +260,12 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData }) =
                                 <p className="font-bold text-amber-800 mb-1 flex items-center gap-1">
                                   <AlertCircle size={12} /> Justificativa do Aluno:
                                 </p>
-                                <p className="mb-2 line-clamp-3" title={record.justification}>{record.justification}</p>
+                                <p className="mb-2 text-[11px] leading-relaxed break-words line-clamp-4" title={justMotivo}>{justMotivo}</p>
+                                {justAttachment && (
+                                  <a href={justAttachment} download={`atestado_${student?.name?.replace(/\s+/g, '_')}.png`} className="flex items-center gap-1.5 w-full justify-center px-2 py-1.5 mb-2 bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50 font-bold rounded text-[10px] transition-colors">
+                                    <FileDown size={14} /> Baixar Anexo
+                                  </a>
+                                )}
                                 <button 
                                   onClick={() => {
                                     const updated = (data.attendance || []).map(a => a.id === record.id ? { ...a, type: 'presence' } : a);
