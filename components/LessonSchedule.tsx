@@ -448,7 +448,7 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
                       isCancelled 
                         ? 'bg-red-50 border-red-200 opacity-80' 
                         : isInProgress
-                        ? 'bg-indigo-50 border-indigo-400 shadow-indigo-100 shadow-lg'
+                        ? 'bg-blue-50 border-blue-400 shadow-blue-100 shadow-lg'
                         : isCompletedStatus
                         ? 'bg-slate-50 border-slate-200 opacity-70'
                         : isRescheduled
@@ -477,8 +477,8 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
                           </span>
                         )}
                         {isInProgress && (
-                          <span className="px-2 py-0.5 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-full animate-pulse flex items-center gap-1">
-                            <Clock size={8} /> Ao Vivo
+                          <span className="px-2 py-0.5 bg-blue-600 text-white text-[9px] font-black uppercase rounded-full animate-pulse flex items-center gap-1">
+                            <Clock size={8} /> Em andamento
                           </span>
                         )}
                         {isCompletedStatus && !isCancelled && (

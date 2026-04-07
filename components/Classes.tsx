@@ -229,11 +229,31 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
           const occupancyPercent = Math.min(100, (studentCount / cls.maxStudents) * 100);
           const course = data.courses.find(c => c.id === cls.courseId);
           
+          const now = new Date();
+          const clsLessons = (data.lessons || []).filter(l => l.classId === cls.id && l.status !== 'cancelled');
+          const isOngoing = clsLessons.some(l => {
+             if (!l.startTime || !l.endTime) return false;
+             const lDate = new Date(l.date + 'T12:00:00Z');
+             if (lDate.getDate() !== now.getDate() || lDate.getMonth() !== now.getMonth() || lDate.getFullYear() !== now.getFullYear()) return false;
+             const [sh, sm] = l.startTime.split(':').map(Number);
+             const lStart = new Date(now); lStart.setHours(sh, sm, 0, 0);
+             const [eh, em] = l.endTime.split(':').map(Number);
+             const lEnd = new Date(now); lEnd.setHours(eh, em, 0, 0);
+             return now >= lStart && now <= lEnd;
+          });
+          
           return (
-            <div key={cls.id} className="bg-white p-7 rounded-xl border border-slate-200 shadow-sm hover:shadow-xl transition-all group border-b-4 border-b-indigo-500/20 hover:border-b-indigo-500 flex flex-col h-full">
-              <div className="flex justify-between items-start mb-5">
+            <div key={cls.id} className={`bg-white p-7 rounded-xl border shadow-sm hover:shadow-xl transition-all group flex flex-col h-full ${isOngoing ? 'border-blue-400 border-b-4 border-b-blue-500 shadow-blue-100' : 'border-slate-200 border-b-4 border-b-indigo-500/20 hover:border-b-indigo-500'}`}>
+              <div className="flex justify-between items-start mb-5 relative">
                 <div>
-                  <h3 className="text-xl font-black text-slate-900 leading-tight">{cls.name}</h3>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="text-xl font-black text-slate-900 leading-tight">{cls.name}</h3>
+                    {isOngoing && (
+                      <span className="px-2 py-0.5 bg-blue-600 text-white text-[9px] font-black uppercase rounded-full animate-pulse shadow-sm flex items-center gap-1">
+                        <Clock size={10} /> Em andamento
+                      </span>
+                    )}
+                  </div>
                   <span className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em]">{course?.name || 'Sem Curso Vinculado'}</span>
                   {cls.defaultStartTime && cls.defaultEndTime && (
                     <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-lg border border-indigo-100">

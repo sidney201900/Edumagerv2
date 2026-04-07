@@ -252,8 +252,8 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData }) =
                         </div>
                         {record.type === 'absence' ? (
                           <div className="flex flex-col items-end gap-2">
-                            <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
-                              <AlertCircle size={10} /> Falta Registrada
+                            <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${record.justification ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                              <AlertCircle size={10} /> {record.justification ? 'Falta Justificada' : 'Falta Registrada'}
                             </span>
                             {record.justification && (
                               <div className="text-xs text-slate-600 bg-amber-50 border border-amber-200 p-2 rounded-lg max-w-[200px] text-left shadow-sm">
