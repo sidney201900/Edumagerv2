@@ -352,7 +352,7 @@ const ReportCard: React.FC<ReportCardProps> = ({ data, updateData }) => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="space-y-3">
                   {data.students
                     .filter(s => s.classId === selectedClass.id)
                     .sort((a, b) => a.name.localeCompare(b.name))
@@ -361,13 +361,17 @@ const ReportCard: React.FC<ReportCardProps> = ({ data, updateData }) => {
                       key={student.id} 
                       className="p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-indigo-200 transition-all flex items-center justify-between group"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400">
-                          <User size={20} />
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 flex-shrink-0 overflow-hidden">
+                          {student.photo ? (
+                            <img src={student.photo} alt={student.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <User size={20} />
+                          )}
                         </div>
-                        <span className="font-bold text-slate-700 truncate max-w-[150px]">{student.name}</span>
+                        <span className="font-bold text-slate-700 text-sm">{student.name}</span>
                       </div>
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-4 flex-shrink-0 ml-4">
                         <div className="hidden sm:flex flex-col items-end">
                           <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Média Geral</span>
                           <span className={`text-sm font-black ${parseFloat(getStudentGeneralAverage(student.id)) >= 6 ? 'text-emerald-600' : 'text-red-600'}`}>

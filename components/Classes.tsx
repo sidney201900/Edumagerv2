@@ -261,25 +261,25 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
                     </div>
                   )}
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-wrap justify-end">
+                <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                   <button 
-                    onClick={() => handleDownloadClassList(cls)} 
+                    onClick={(e) => { e.stopPropagation(); handleDownloadClassList(cls); }} 
                     disabled={isGeneratingPDF === cls.id}
-                    className="p-2 text-slate-400 hover:text-indigo-600 rounded-lg transition-all disabled:opacity-50 inline-flex items-center gap-1 bg-slate-50 hover:bg-indigo-50" 
+                    className="p-2 text-slate-400 hover:text-indigo-600 rounded-lg transition-all disabled:opacity-50 bg-slate-50 hover:bg-indigo-50" 
                     title="Imprimir Diário"
                   >
                     {isGeneratingPDF === cls.id ? <RefreshCw size={16} className="animate-spin" /> : <Printer size={16} />}
                   </button>
-                  <button onClick={() => handleEdit(cls)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all">
+                  <button onClick={(e) => { e.stopPropagation(); handleEdit(cls); }} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all" title="Editar Turma">
                     <Edit2 size={16} />
                   </button>
-                  <button onClick={() => handleDelete(cls.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-slate-50 rounded-lg transition-all">
+                  <button onClick={(e) => { e.stopPropagation(); handleDelete(cls.id); }} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Excluir Turma">
                     <Trash2 size={16} />
                   </button>
                 </div>
               </div>
               
-              <div className="space-y-3 mb-8 flex-1">
+              <div className="space-y-3 mb-5 flex-1">
                 <div className="flex items-center gap-3 text-sm text-slate-600 bg-slate-50 p-3 rounded-lg">
                   <User size={18} className="text-indigo-500" /> 
                   <div>
@@ -301,6 +301,35 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
                     </p>
                   </div>
                 </div>
+                {/* Contagem de Aulas */}
+                {(() => {
+                  const now = new Date();
+                  const totalLessons = clsLessons.length;
+                  const completedLessons = clsLessons.filter(l => {
+                    if (l.status === 'cancelled') return false;
+                    const lDate = new Date(l.date + 'T12:00:00Z');
+                    if (!l.endTime) return lDate < now;
+                    const [eh, em] = l.endTime.split(':').map(Number);
+                    const lEnd = new Date(lDate);
+                    lEnd.setUTCHours(eh, em, 0, 0);
+                    return now > lEnd;
+                  }).length;
+                  const cancelledLessons = clsLessons.filter(l => l.status === 'cancelled').length;
+                  const remainingLessons = totalLessons - completedLessons - cancelledLessons;
+                  return totalLessons > 0 ? (
+                    <div className="flex items-center gap-2 flex-wrap text-[10px] font-black">
+                      <span className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded-lg flex items-center gap-1">
+                        <Calendar size={10} /> {totalLessons} Total
+                      </span>
+                      <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg">
+                        {completedLessons} Concluídas
+                      </span>
+                      <span className="px-2 py-1 bg-amber-50 text-amber-600 rounded-lg">
+                        {remainingLessons} Restantes
+                      </span>
+                    </div>
+                  ) : null;
+                })()}
               </div>
 
               <div className="space-y-2">

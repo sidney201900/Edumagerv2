@@ -165,6 +165,7 @@ export interface Attendance {
   verified: boolean;
   type?: 'presence' | 'absence';
   justification?: string;
+  justificationAccepted?: boolean;
 }
 
 export interface CertificateTemplate {

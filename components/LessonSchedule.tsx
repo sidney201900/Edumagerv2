@@ -364,51 +364,101 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in">
-      <div className="bg-slate-50 rounded-2xl w-full max-w-4xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in duration-300">
+      <div className="bg-slate-50 rounded-2xl w-full max-w-4xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-4 zoom-in-95 duration-300">
+        <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-20"></div>
         
         {/* Header */}
-        <div className="p-4 md:p-6 border-b border-slate-200 bg-white flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 z-10 sticky top-0">
-          <button onClick={onClose} className="absolute top-4 right-4 md:top-6 md:right-6 p-2 bg-slate-100 text-slate-500 hover:text-red-500 rounded-xl transition-all">
-            <X size={20} />
-          </button>
-          <div className="pr-12">
-            <h3 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-              <Calendar className="text-indigo-600" /> Cronograma de Aulas
-            </h3>
-            <p className="text-sm text-slate-500 font-medium">Turma: {classObj.name}</p>
+        <div className="p-4 md:p-6 border-b border-slate-200 bg-white z-10 sticky top-0">
+          <div className="flex justify-between items-start mb-3">
+            <div>
+              <h3 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+                <Calendar className="text-indigo-600" /> Cronograma de Aulas
+              </h3>
+              <p className="text-sm text-slate-500 font-medium">Turma: {classObj.name}</p>
+            </div>
+            <button onClick={onClose} className="p-2.5 bg-slate-100 text-slate-500 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all flex-shrink-0">
+              <X size={20} />
+            </button>
           </div>
-          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+          <div className="flex flex-wrap items-center gap-2">
             <button 
               onClick={handleDeleteAllSchedule}
-              className="px-3 py-1.5 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600 transition-colors flex items-center gap-1.5 shadow-sm text-xs md:text-sm"
+              className="px-3 py-1.5 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600 transition-colors flex items-center gap-1.5 shadow-sm text-xs"
               title="Exclui todo o cronograma permanentemente"
             >
-              <Trash2 size={16} /> Excluir Tudo
+              <Trash2 size={14} /> Excluir Tudo
             </button>
             <button 
               onClick={handleCancelAllFuture}
-              className="px-3 py-1.5 bg-red-100 text-red-700 font-bold rounded-lg hover:bg-red-200 transition-colors flex items-center gap-1.5 text-xs md:text-sm"
+              className="px-3 py-1.5 bg-red-100 text-red-700 font-bold rounded-lg hover:bg-red-200 transition-colors flex items-center gap-1.5 text-xs"
               title="Cancela todas as próximas aulas da turma"
             >
-              <AlertCircle size={16} /> Cancelar Todas
+              <AlertCircle size={14} /> Cancelar Todas
             </button>
             <button 
               onClick={handleUncancelAllFuture}
-              className="px-3 py-1.5 bg-emerald-100 text-emerald-700 font-bold rounded-lg hover:bg-emerald-200 transition-colors flex items-center gap-1.5 text-xs md:text-sm"
+              className="px-3 py-1.5 bg-emerald-100 text-emerald-700 font-bold rounded-lg hover:bg-emerald-200 transition-colors flex items-center gap-1.5 text-xs"
               title="Reativa todas as próximas aulas canceladas"
             >
-              <RefreshCw size={16} /> Reativar Todas
+              <RefreshCw size={14} /> Reativar Todas
             </button>
             <button 
               onClick={() => setShowGenerateModal(true)}
-              className="px-3 py-1.5 bg-indigo-100 text-indigo-700 font-bold rounded-lg hover:bg-indigo-200 transition-colors flex items-center gap-1.5 text-xs md:text-sm"
+              className="px-3 py-1.5 bg-indigo-100 text-indigo-700 font-bold rounded-lg hover:bg-indigo-200 transition-colors flex items-center gap-1.5 text-xs"
             >
-              <Plus size={16} /> Adicionar Extra
+              <Plus size={14} /> Adicionar Extra
             </button>
           </div>
         </div>
+
+          {/* Lesson Stats Bar */}
+          {classLessons.length > 0 && (() => {
+            const now = new Date();
+            const totalLessons = classLessons.length;
+            const completedLessons = classLessons.filter(l => {
+              if (l.status === 'cancelled') return false;
+              const lDate = new Date(l.date + 'T12:00:00Z');
+              if (!l.endTime) return lDate < now;
+              const [eh, em] = l.endTime.split(':').map(Number);
+              const lEnd = new Date(lDate);
+              lEnd.setUTCHours(eh, em, 0, 0);
+              return now > lEnd;
+            }).length;
+            const cancelledLessons = classLessons.filter(l => l.status === 'cancelled').length;
+            const remainingLessons = totalLessons - completedLessons - cancelledLessons;
+            const progressPercent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+
+            return (
+              <div className="px-6 py-3 bg-white border-b border-slate-100 flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap gap-2 text-[11px] font-black flex-1">
+                  <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg flex items-center gap-1">
+                    <Calendar size={12} /> {totalLessons} Total
+                  </span>
+                  <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg flex items-center gap-1">
+                    <CheckCircle size={12} /> {completedLessons} Concluídas
+                  </span>
+                  <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg flex items-center gap-1">
+                    <Clock size={12} /> {remainingLessons} Restantes
+                  </span>
+                  {cancelledLessons > 0 && (
+                    <span className="px-2.5 py-1 bg-red-50 text-red-600 rounded-lg flex items-center gap-1">
+                      <AlertCircle size={12} /> {cancelledLessons} Canceladas
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 min-w-[140px]">
+                  <div className="flex-1 bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-indigo-500 rounded-full transition-all duration-500" 
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-black text-slate-500 whitespace-nowrap">{progressPercent}%</span>
+                </div>
+              </div>
+            );
+          })()}
 
         {/* Content */}
         <div className="p-6 overflow-y-auto flex-1">
