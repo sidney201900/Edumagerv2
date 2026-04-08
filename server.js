@@ -95,8 +95,18 @@ function formatCobrancaDate(dateStr) {
 // Integarção WhatsApp Evolution API
 async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = null) {
   try {
-    const { data: cob } = await supabase.from('alunos_cobrancas').select('*').eq('asaas_payment_id', asaasPaymentId).single();
-    if (!cob) return console.log(`[Evolution] Cobrança não encontrada: ${asaasPaymentId}`);
+    // 1. Buscar dados da cobrança no banco com pequena retentativa para evitar lag de insert
+    let cob = null;
+    for (let i = 0; i < 3; i++) {
+      const { data } = await supabase.from('alunos_cobrancas').select('*').eq('asaas_payment_id', asaasPaymentId).single();
+      if (data) {
+        cob = data;
+        break;
+      }
+      if (i < 2) await new Promise(r => setTimeout(r, 1000));
+    }
+
+    if (!cob) return console.log(`[Evolution] Cobrança não encontrada no banco após tentativas: ${asaasPaymentId}`);
     
     let fallbackValor = cob.valor;
     let fallbackVencimento = cob.vencimento;
@@ -230,38 +240,48 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
 
     const isTextOnlyEvent = ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED', 'PAYMENT_DELETED'].includes(eventType);
     const isPaymentConfirmation = ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED'].includes(eventType);
+    const isCreationEvent = eventType === 'PAYMENT_CREATED';
     
     // Se for confirmação de pagamento, adicionamos o link do recibo (HTML) ao texto, pois o PDF daria erro de download
     if (isPaymentConfirmation && pdfUrl) {
       msgFinal += `\n\n📄 Acesse seu comprovante aqui:\n${pdfUrl}`;
     }
 
-    // Download do PDF e Conversão para Base64
+    // Download do PDF e Conversão para Base64 com Retentativa (Asaas pode demorar a gerar o Carnê)
     let base64Pdf = null;
     if (pdfUrl && !isTextOnlyEvent) {
-      try {
-        console.log(`[WhatsApp] Tentando baixar PDF: ${pdfUrl}`);
-        
-        const fetchOptions = {
-          headers: { 'Accept': 'application/pdf' }
-        };
-        // Injeta chave do Asaas caso a rota demande auth (ex: paymentBook do Installment)
-        if (pdfUrl.includes('asaas.com/api')) {
-          fetchOptions.headers['access_token'] = process.env.ASAAS_API_KEY;
-        }
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          console.log(`[WhatsApp] Tentando baixar PDF (Tentativa ${attempt}): ${pdfUrl}`);
+          
+          const fetchOptions = {
+            headers: { 'Accept': 'application/pdf' }
+          };
+          if (pdfUrl.includes('asaas.com/api')) {
+            fetchOptions.headers['access_token'] = process.env.ASAAS_API_KEY;
+          }
 
-        const pdfResp = await fetch(pdfUrl, fetchOptions);
-        
-        if (pdfResp.ok) {
-          const arrayBuffer = await pdfResp.arrayBuffer();
-          base64Pdf = Buffer.from(arrayBuffer).toString('base64');
-          console.log(`[WhatsApp] PDF baixado e convertido para Base64 com sucesso.`);
-        } else {
-          console.warn(`[WhatsApp] Falha ao baixar PDF (Status: ${pdfResp.status}). Fallback para texto ativado.`);
+          const pdfResp = await fetch(pdfUrl, fetchOptions);
+          
+          if (pdfResp.ok && pdfResp.headers.get('content-type')?.includes('pdf')) {
+            const arrayBuffer = await pdfResp.arrayBuffer();
+            base64Pdf = Buffer.from(arrayBuffer).toString('base64');
+            console.log(`[WhatsApp] PDF baixado e convertido para Base64 com sucesso.`);
+            break;
+          } else {
+            console.warn(`[WhatsApp] Tentativa ${attempt} falhou (Status: ${pdfResp.status}).`);
+            if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
+          }
+        } catch (err) {
+          console.warn(`[WhatsApp] Exceção na tentativa ${attempt}: ${err.message}`);
+          if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
         }
-      } catch (err) {
-        console.warn(`[WhatsApp] Exceção ao baixar PDF: ${err.message}. Fallback para texto ativado.`);
       }
+    }
+
+    // Se falhou o download do PDF mas temos a URL, injeta no texto para o aluno não ficar sem nada
+    if ((isCreationEvent || isPaymentConfirmation || eventType === 'PAYMENT_UPDATED') && !base64Pdf && pdfUrl) {
+      msgFinal += `\n\n📄 Acesse aqui sua cobrança:\n${pdfUrl}`;
     }
 
     // Define endpoint e payload
