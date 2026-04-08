@@ -578,8 +578,8 @@ app.post('/api/gerar_cobranca', async (req, res) => {
       // Condição B: Salvar todas as parcelas geradas com o ID do pacote (installment)
       console.log('Detectado Parcelamento. ID do Carnê:', installmentId);
       
-      // Buscar todas as cobranças geradas para este parcelamento no Asaas
-      const installmentsRes = await fetch(`${ASAAS_BASE_URL}/v3/payments?installment=${installmentId}`, {
+      // Buscar todas as cobranças geradas para este parcelamento no Asaas (Aumentado limit para suportar > 10 parcelas)
+      const installmentsRes = await fetch(`${ASAAS_BASE_URL}/v3/payments?installment=${installmentId}&limit=100`, {
         method: 'GET',
         headers: {
           'access_token': process.env.ASAAS_API_KEY
@@ -590,16 +590,18 @@ app.post('/api/gerar_cobranca', async (req, res) => {
         const installmentsData = await installmentsRes.json();
         console.log(`Encontradas ${installmentsData.data.length} parcelas no Asaas.`);
 
-        paymentsToSave = installmentsData.data.map(p => ({
-          aluno_id: aluno_id,
-          asaas_customer_id: customerId,
-          asaas_payment_id: p.id,
-          asaas_installment_id: installmentId,
-          installment: installmentId, // Mantido para compatibilidade
-          valor: p.value,
-          vencimento: p.dueDate,
-          link_boleto: p.bankSlipUrl
-        }));
+        paymentsToSave = installmentsData.data
+          .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+          .map(p => ({
+            aluno_id: aluno_id,
+            asaas_customer_id: customerId,
+            asaas_payment_id: p.id,
+            asaas_installment_id: installmentId,
+            installment: installmentId, // Mantido para compatibilidade
+            valor: p.value,
+            vencimento: p.dueDate,
+            link_boleto: p.bankSlipUrl
+          }));
       } else {
         console.error('Falha ao buscar parcelas do installment:', installmentId);
         throw new Error('Falha ao buscar parcelas do Asaas');
