@@ -335,6 +335,20 @@ app.post('/api/webhook_asaas', async (req, res) => {
           valor: payload.payment.value,
           data_pagamento: payload.payment.confirmedDate || payload.payment.paymentDate || new Date().toISOString().split('T')[0]
         };
+        // Busca o transactionReceiptUrl da API Asaas e salva no banco como cache
+        try {
+          const receiptResp = await fetch(`${ASAAS_BASE_URL}/v3/payments/${asaasPaymentId}`, { 
+            headers: { 'access_token': process.env.ASAAS_API_KEY } 
+          });
+          if (receiptResp.ok) {
+            const receiptData = await receiptResp.json();
+            if (receiptData.transactionReceiptUrl) {
+              updateData.transaction_receipt_url = receiptData.transactionReceiptUrl;
+            }
+          }
+        } catch (e) {
+          console.warn('[Webhook] Não foi possível buscar transactionReceiptUrl:', e.message);
+        }
         sendEvolutionMessage(asaasPaymentId, 'PAYMENT_RECEIVED');
         break;
       case 'PAYMENT_OVERDUE':
