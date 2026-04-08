@@ -321,5 +321,40 @@ export const dbService = {
       reader.onerror = () => reject(new Error('Failed to read file'));
       reader.readAsText(file);
     });
+  },
+
+  resetData: async (): Promise<void> => {
+    try {
+      localStorage.clear();
+      
+      const db = await openDB();
+      return new Promise((resolve) => {
+        const transaction = db.transaction(STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const req = store.delete(STORAGE_KEY);
+        
+        req.onsuccess = async () => {
+          const resetState = JSON.parse(JSON.stringify(initialData));
+          resetState.users.push({ 
+            id: 'default-admin', 
+            name: 'admin', 
+            displayName: 'Administrador',
+            password: 'admin', 
+            cpf: '000.000.000-00',
+            role: 'admin'
+          });
+          
+          if (isSupabaseConfigured()) {
+            try {
+              await supabase.from('school_data').upsert({ id: 1, data: resetState, updated_at: new Date().toISOString() });
+            } catch(e) {}
+          }
+          resolve();
+        };
+        req.onerror = () => resolve();
+      });
+    } catch (e) {
+      console.error(e);
+    }
   }
 };

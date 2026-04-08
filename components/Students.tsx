@@ -1925,8 +1925,8 @@ const Students: React.FC<StudentsProps> = ({ data, updateData }) => {
     )}
       {/* Batch Delete Confirmation Modal */}
       {showDeleteBatchModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in slide-in-from-bottom-8 duration-300">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-slide-up">
             <div className="bg-red-600 h-1.5 w-full"></div>
             <div className="p-8 text-center">
               <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1959,8 +1959,8 @@ const Students: React.FC<StudentsProps> = ({ data, updateData }) => {
 
       {/* Cancellation Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in slide-in-from-bottom-8 duration-300">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-slide-up">
             <div className="bg-orange-500 h-1.5 w-full"></div>
             <div className="p-8">
               <div className="flex items-center gap-4 mb-6">

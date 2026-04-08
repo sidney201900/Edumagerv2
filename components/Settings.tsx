@@ -282,8 +282,8 @@ using (true);`;
     }
   };
 
-  const handleReset = () => {
-    localStorage.clear();
+  const handleReset = async () => {
+    await dbService.resetData();
     window.location.reload();
   };
 
@@ -647,7 +647,7 @@ using (true);`;
       {/* Evolution API Modal */}
       {showEvolutionModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-slide-up">
             <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <h3 className="text-xl font-bold text-slate-800">Credenciais Evolution API</h3>
               <button 

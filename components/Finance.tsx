@@ -312,6 +312,21 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
     return `${y}-${m}-${d}`;
   };
 
+  const paymentIndexMap = useMemo(() => {
+    return new Map(data.payments.map((p, i) => [p.id, i]));
+  }, [data.payments]);
+
+  const maxIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    data.payments.forEach(p => {
+      const key = p.installmentId || p.id;
+      const currentIndex = paymentIndexMap.get(p.id) || 0;
+      const maxSoFar = map.get(key) || -1;
+      if (currentIndex > maxSoFar) map.set(key, currentIndex);
+    });
+    return map;
+  }, [data.payments, paymentIndexMap]);
+
   const filteredPayments = data.payments
     .filter(p => {
       const statusMatch = filterStatus === 'all' || p.status === filterStatus;
@@ -332,7 +347,12 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
 
       return statusMatch && studentMatch && classMatch && typeMatch;
     })
-    .sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime());
+    .sort((a, b) => {
+      const keyA = maxIndexMap.get(a.installmentId || a.id) || 0;
+      const keyB = maxIndexMap.get(b.installmentId || b.id) || 0;
+      if (keyA !== keyB) return keyB - keyA;
+      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+    });
 
   const groupedInstallments = useMemo(() => {
     if (filterType !== 'parcelamentos') return [];
@@ -346,7 +366,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
     });
 
     return Object.entries(groups).map(([id, payments]) => {
-      const sorted = payments.sort((a, b) => (a.installmentNumber || 0) - (b.installmentNumber || 0));
+      const sorted = payments.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
       return {
         installmentId: id,
         payments: sorted,
@@ -356,8 +376,12 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
         description: sorted[0].description?.split(' (')[0] || 'Parcelamento',
         dueDate: sorted[0].dueDate
       };
-    }).sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime());
-  }, [filteredPayments, filterType]);
+    }).sort((a, b) => {
+      const keyA = maxIndexMap.get(a.installmentId) || 0;
+      const keyB = maxIndexMap.get(b.installmentId) || 0;
+      return keyB - keyA;
+    });
+  }, [filteredPayments, filterType, maxIndexMap]);
 
   const toggleInstallment = (id: string) => {
     setExpandedInstallments(prev =>
@@ -1394,7 +1418,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
 
       {carneToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] animate-slide-up">
             <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 relative overflow-hidden">
               <div className="relative z-10 flex items-center gap-4">
                 <div className="w-12 h-12 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center shadow-inner">
@@ -1442,7 +1466,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
 
       {paymentToEdit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <form onSubmit={handleEditSave} className="bg-white rounded-3xl w-full max-w-md shadow-xl overflow-hidden flex flex-col relative">
+          <form onSubmit={handleEditSave} className="bg-white rounded-3xl w-full max-w-md shadow-xl overflow-hidden flex flex-col relative animate-slide-up">
             <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
               <h3 className="text-xl font-black text-slate-800 tracking-tight">Editar Cobrança</h3>
             </div>
