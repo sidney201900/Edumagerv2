@@ -38,6 +38,8 @@ app.use(cors());
   }
 
 const cancelCache = new Set();
+const sentCache = new Set(); // Cache para evitar disparos duplicados (Anti-Spam/Race Condition)
+const lockCache = new Set(); // Cache de trava para processamento em curso
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -115,7 +117,16 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
       return;
     }
 
-    console.log('[WhatsApp] Configurações encontradas');
+    // Anti-Spam: Evita enviar a mesma mensagem para o mesmo ID e evento em curto intervalo
+    const cacheKey = `${asaasPaymentId}_${eventType}`;
+    if (sentCache.has(cacheKey)) {
+      console.log(`[WhatsApp] Mensagem para ${cacheKey} já enviada recentemente. Ignorando.`);
+      return;
+    }
+    sentCache.add(cacheKey);
+    setTimeout(() => sentCache.delete(cacheKey), 30000); // Limpa após 30s
+
+    console.log('[WhatsApp] Configurações encontradas para evento:', eventType);
 
     const aluno = appData.students?.find(s => s.id === cob.aluno_id);
     if (!aluno) return console.log(`[WhatsApp] Aluno não encontrado localmente para a cobrança.`);
@@ -162,6 +173,11 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
       if (pData.description) {
         descricao = pData.description;
       }
+      
+      // Fallback para valor e vencimento se vieram do Asaas
+      if (pData.value) fallbackValor = pData.value;
+      if (pData.dueDate) fallbackVencimento = pData.dueDate;
+
       if (descricao.includes('Parcela')) {
         if (eventType === 'PAYMENT_CREATED') {
           descricao = descricao.replace(' de ', ' a ');
@@ -325,8 +341,8 @@ app.post('/api/webhook_asaas', async (req, res) => {
 
     switch (payload.event) {
       case 'PAYMENT_CREATED':
-        // Apenas disparamos a evolução, mas não atualizamos banco aqui, pois o post gerar_cobranca salva.
-        sendEvolutionMessage(asaasPaymentId, 'PAYMENT_CREATED');
+        // No webhook de criação, apenas disparamos se ainda não foi disparado pela rota manual
+        setTimeout(() => sendEvolutionMessage(asaasPaymentId, 'PAYMENT_CREATED'), 2000); 
         return res.status(200).json({ message: 'Webhook PAYMENT_CREATED processado' });
       case 'PAYMENT_RECEIVED':
       case 'PAYMENT_CONFIRMED':
@@ -356,81 +372,17 @@ app.post('/api/webhook_asaas', async (req, res) => {
         if (installmentId) {
           if (cancelCache.has(installmentId)) {
             console.log(`[WhatsApp Webhook] Ignorando spam de cancelamento para a parcela do carnê ${installmentId}`);
-            // Apenas deleta do Supabase silenciosamente e encerra
             await supabase.from('alunos_cobrancas').delete().eq('asaas_payment_id', asaasPaymentId);
             return res.status(200).send('OK');
-          } else {
-            // Adiciona ao cache e limpa após 1 minuto
-            cancelCache.add(installmentId);
-            setTimeout(() => cancelCache.delete(installmentId), 60000);
           }
+          cancelCache.add(installmentId);
+          setTimeout(() => cancelCache.delete(installmentId), 60000);
         }
 
-        try {
-          const { data: cob } = await supabase.from('alunos_cobrancas').select('*').eq('asaas_payment_id', asaasPaymentId).single();
-          if (cob) {
-            const { data: schoolDataObj } = await supabase.from('school_data').select('data').eq('id', 1).single();
-            const aluno = schoolDataObj?.data?.students?.find(s => s.id === cob.aluno_id);
-            const evoConfig = schoolDataObj?.data?.evolutionConfig;
-            
-            if (aluno && evoConfig && evoConfig.apiUrl) {
-              const birthDateStr = aluno.data_nascimento || aluno.birthDate || '';
-              let age = 18;
-
-              if (birthDateStr && birthDateStr.includes('-')) {
-                const parts = birthDateStr.split('T')[0].split('-'); 
-                const year = parseInt(parts[0], 10);
-                const month = parseInt(parts[1], 10);
-                const day = parseInt(parts[2], 10);
-                
-                const birthDate = new Date(year, month - 1, day);
-                const today = new Date();
-                age = today.getFullYear() - birthDate.getFullYear();
-                const m = today.getMonth() - birthDate.getMonth();
-                if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
-              }
-              
-              const isMinor = age < 18;
-              const targetPhone = (isMinor && (aluno.telefone_responsavel || aluno.guardianPhone)) ? (aluno.telefone_responsavel || aluno.guardianPhone) : (aluno.telefone || aluno.phone);
-              const targetName = (isMinor && (aluno.nome_responsavel || aluno.guardianName)) ? (aluno.nome_responsavel || aluno.guardianName) : (aluno.nome || aluno.name);
-
-              if (targetPhone) {
-                let cleanPhone = targetPhone.replace(/\D/g, '');
-                if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
-
-                const valor = Number(payload.payment.value || cob.valor);
-                const vencimentoFormatado = formatCobrancaDate(payload.payment.dueDate || cob.vencimento);
-
-                const mensagemCancelamento = installmentId 
-                  ? `Olá ${targetName}, informamos que o seu CARNÊ / PARCELAMENTO foi CANCELADO em nosso sistema. Todas as parcelas vinculadas a ele foram baixadas. Caso tenha dúvidas, entre em contato com a secretaria.`
-                  : `Olá ${targetName}, a cobrança de R$ ${valor.toFixed(2).replace('.', ',')} com vencimento original para ${vencimentoFormatado} foi CANCELADA. Caso tenha dúvidas, entre em contato com a secretaria.`;
-                
-                const url = `${evoConfig.apiUrl.replace(/\/$/, '')}/message/sendText/${evoConfig.instanceName}`;
-                console.log(`[Evolution] POST para ${cleanPhone} (PAYMENT_DELETED) usando sendText`);
-                
-                const evoResp = await fetch(url, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'apikey': evoConfig.apiKey },
-                  body: JSON.stringify({
-                    number: cleanPhone,
-                    text: mensagemCancelamento
-                  })
-                });
-                
-                if (evoResp.ok) {
-                  console.log(`[WhatsApp] ✅ Disparo de cancelamento enviado com sucesso para: ${cleanPhone}`);
-                } else {
-                  const errBody = await evoResp.text();
-                  console.error(`[WhatsApp] ❌ Erro ao enviar cancelamento pela Evolution API:`, evoResp.status, errBody);
-                }
-              }
-            }
-          }
-        } catch (e) {
-          console.error('[WhatsApp Cancelamento] Erro:', e.message);
-        }
+        // 2. Disparo via função padrão padronizada
+        await sendEvolutionMessage(asaasPaymentId, 'PAYMENT_DELETED');
         
-        // Exclusão SOMENTE DEPOIS do envio explícito para a API
+        // 3. Exclusão SOMENTE DEPOIS do envio
         await supabase.from('alunos_cobrancas').delete().eq('asaas_payment_id', asaasPaymentId);
         addLog('Webhook', `Sucesso PAYMENT_DELETED`, { asaasPaymentId });
         return res.status(200).send('OK');
@@ -655,6 +607,13 @@ app.post('/api/gerar_cobranca', async (req, res) => {
     if (dbError) {
       console.error('Supabase Insert Error:', dbError);
       throw new Error('Falha ao salvar no banco de dados');
+    }
+
+    // DISPARO IMEDIATO DO WHATSAPP (Ignora race condition do webhook)
+    if (paymentsToSave.length > 0) {
+      const firstPaymentId = paymentsToSave[0].asaas_payment_id;
+      console.log(`[Evolution] Disparando mensagem de criação imediata para ${firstPaymentId}`);
+      sendEvolutionMessage(firstPaymentId, 'PAYMENT_CREATED').catch(e => console.error('Erro no disparo imediato:', e));
     }
 
     return res.status(200).json({ 
