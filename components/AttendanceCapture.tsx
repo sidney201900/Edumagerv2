@@ -214,12 +214,16 @@ const AttendanceCapture: React.FC<AttendanceCaptureProps> = ({ data, updateData 
   const confirmPresence = () => {
     if (!detectedStudentId || !detectedClassId || !capturedImage) return;
 
-    // Check if already present today
-    const today = new Date().toISOString().split('T')[0];
-    const alreadyPresent = data.attendance.some(a => 
-      a.studentId === detectedStudentId && 
-      a.date.startsWith(today)
-    );
+    // Check if already present for THIS class within a 1-hour window
+    // (Allows multiple presences per day if lessons are at different times)
+    const now = new Date();
+    const alreadyPresent = data.attendance.some(a => {
+      if (a.studentId !== detectedStudentId || a.classId !== detectedClassId) return false;
+      const attDate = new Date(a.date);
+      const isSameDay = attDate.toDateString() === now.toDateString();
+      const diffMs = Math.abs(now.getTime() - attDate.getTime());
+      return isSameDay && diffMs < (60 * 60 * 1000); // Intervalo de 1h
+    });
 
     if (alreadyPresent) {
       showAlert('Atenção', "Aluno já marcou presença hoje!", 'warning');
