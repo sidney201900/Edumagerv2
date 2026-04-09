@@ -1009,6 +1009,9 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
                             </td>
                             <td className="px-4 py-4">
                               <div className="font-bold text-slate-700 text-sm">R$ {payment.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                              {!!payment.discount && payment.discount > 0 && (
+                                <div className="text-[10px] text-emerald-600 font-bold">- R$ {payment.discount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                              )}
                             </td>
                             <td className="px-4 py-4">{getStatusBadge(payment)}</td>
                             <td className="px-4 py-4">

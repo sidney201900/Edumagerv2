@@ -128,7 +128,9 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
     }
 
     // Anti-Spam: Evita enviar a mesma mensagem para o mesmo ID e evento em curto intervalo
-    const cacheKey = `${asaasPaymentId}_${eventType}`;
+    const normalizedEvent = (eventType === 'PAYMENT_RECEIVED' || eventType === 'PAYMENT_CONFIRMED') ? 'PAYMENT_RECEIVED' : eventType;
+    const cacheKey = `${asaasPaymentId}_${normalizedEvent}`;
+    
     if (sentCache.has(cacheKey)) {
       console.log(`[WhatsApp] Mensagem para ${cacheKey} já enviada recentemente. Ignorando.`);
       return;
@@ -242,8 +244,8 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
     const isPaymentConfirmation = ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED'].includes(eventType);
     const isCreationEvent = eventType === 'PAYMENT_CREATED';
     
-    // Se for confirmação de pagamento, adicionamos o link do recibo (HTML) ao texto, pois o PDF daria erro de download
-    if (isPaymentConfirmation && pdfUrl) {
+    // Se for confirmação de pagamento, adicionamos o link do recibo (HTML) ao texto apenas se ele não estiver no template
+    if (isPaymentConfirmation && pdfUrl && !templateText.includes('{link_boleto}')) {
       msgFinal += `\n\n📄 Acesse seu comprovante aqui:\n${pdfUrl}`;
     }
 
@@ -380,8 +382,32 @@ app.post('/api/webhook_asaas', async (req, res) => {
         sendEvolutionMessage(asaasPaymentId, 'PAYMENT_RECEIVED');
         break;
       case 'PAYMENT_OVERDUE':
-        updateData = { status: 'ATRASADO', valor: payload.payment.value };
-        sendEvolutionMessage(asaasPaymentId, 'PAYMENT_OVERDUE');
+      case 'PAYMENT_UPDATED':
+      case 'PAYMENT_RESTORED':
+        const statusMap = {
+          'PENDING': 'PENDENTE',
+          'OVERDUE': 'ATRASADO',
+          'RECEIVED': 'PAGO',
+          'CONFIRMED': 'PAGO',
+          'RECEIVED_IN_CASH': 'PAGO',
+          'REFUNDED': 'CANCELADO',
+          'DELETED': 'CANCELADO'
+        };
+        
+        updateData = { 
+          valor: payload.payment.value, 
+          vencimento: payload.payment.dueDate,
+          status: statusMap[payload.payment.status] || undefined
+        };
+        
+        // Remove campos undefined para evitar sobrescrever dados válidos
+        Object.keys(updateData).forEach(k => updateData[k] === undefined && delete updateData[k]);
+        
+        if (payload.event === 'PAYMENT_OVERDUE') {
+          sendEvolutionMessage(asaasPaymentId, 'PAYMENT_OVERDUE');
+        } else if (payload.event === 'PAYMENT_UPDATED') {
+          sendEvolutionMessage(asaasPaymentId, 'PAYMENT_UPDATED');
+        }
         break;
       case 'PAYMENT_DELETED':
       case 'PAYMENT_CANCELED':
@@ -406,12 +432,7 @@ app.post('/api/webhook_asaas', async (req, res) => {
         await supabase.from('alunos_cobrancas').delete().eq('asaas_payment_id', asaasPaymentId);
         addLog('Webhook', `Sucesso PAYMENT_DELETED`, { asaasPaymentId });
         return res.status(200).send('OK');
-      case 'PAYMENT_UPDATED':
-        updateData = { valor: payload.payment.value, vencimento: payload.payment.dueDate, status: payload.payment.status === 'RECEIVED' ? 'PAGO' : undefined };
-        // Remove undefined keys
-        Object.keys(updateData).forEach(k => updateData[k] === undefined && delete updateData[k]);
-        sendEvolutionMessage(asaasPaymentId, 'PAYMENT_UPDATED');
-        break;
+      // PAYMENT_UPDATED movido para o bloco unificado acima
       default:
         console.log(`Evento ignorado: ${payload.event}`);
         return res.status(200).json({ message: 'Evento ignorado' });
