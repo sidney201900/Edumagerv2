@@ -50,6 +50,14 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
       if (l.id === ignoreLessonId || l.status === 'cancelled') return false;
       if (l.date !== date) return false;
       if (!l.startTime || !l.endTime) return false;
+
+      // Só dá conflito se for na mesma TURMA ou com o mesmo PROFESSOR
+      const isSameClass = l.classId === classObj.id;
+      const otherClass = data.classes.find(c => c.id === l.classId);
+      const isSameTeacher = otherClass && classObj.teacher && otherClass.teacher === classObj.teacher;
+
+      if (!isSameClass && !isSameTeacher) return false;
+
       // Regra: NovoInicio < HorarioFimExistente AND NovoFim > HorarioInicioExistente
       return (start < l.endTime) && (end > l.startTime);
     });

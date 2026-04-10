@@ -28,16 +28,11 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
   const initRules = defaultVars.automationRules || defaultTemplates.automationRules;
   
   const [templates, setTemplates] = useState({
-    boletoGerado: defaultVars.boletoGerado || defaultTemplates.boletoGerado,
-    pagamentoConfirmado: defaultVars.pagamentoConfirmado || defaultTemplates.pagamentoConfirmado,
-    boletoVencido: defaultVars.boletoVencido || defaultTemplates.boletoVencido,
-    cobrancaCancelada: defaultVars.cobrancaCancelada || defaultTemplates.cobrancaCancelada,
-    cobrancaAtualizada: defaultVars.cobrancaAtualizada || defaultTemplates.cobrancaAtualizada,
-    felizAniversario: defaultVars.felizAniversario || defaultTemplates.felizAniversario,
+    ...defaultTemplates,
+    ...defaultVars,
     automationRules: {
-      sendOnDueDate: initRules.sendOnDueDate !== undefined ? initRules.sendOnDueDate : true,
-      sendDaysAfter: initRules.sendDaysAfter || '1',
-      repeatEveryDays: initRules.repeatEveryDays || '3'
+      ...defaultTemplates.automationRules,
+      ...initRules
     }
   });
 
