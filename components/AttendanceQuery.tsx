@@ -493,7 +493,7 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData }) =
                 onClick={handleAddAbsence}
                 className="w-full py-4 bg-amber-500 text-white rounded-2xl font-black text-lg hover:bg-amber-600 shadow-lg shadow-amber-100 flex items-center justify-center gap-2 transition-all active:scale-95"
               >
-                <CheckCircle size={24} /> Registrar Falta
+                Salvar Justificativa
               </button>
             </div>
           </div>

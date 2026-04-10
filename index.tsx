@@ -21,7 +21,7 @@ import Employees from './components/Employees';
 import Messages from './components/Messages';
 import AdminNotifications from './components/AdminNotifications';
 import { Cloud, CloudOff, RefreshCw, AlertCircle } from 'lucide-react';
-import { isSupabaseConfigured } from './services/supabase';
+import { supabase, isSupabaseConfigured } from './services/supabase';
 import { DialogProvider } from './DialogContext';
 
 const App = () => {
@@ -113,6 +113,34 @@ const App = () => {
       link.href = logoUrl;
     }
   }, [data.logo]);
+  // 4. Efeito para Realtime (Escuta mudanças do Portal em tempo real)
+  useEffect(() => {
+    if (isCloudEnabled) {
+      // Cria um canal de escuta para a tabela school_data
+      const channel = supabase
+        .channel('school_data_changes')
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'school_data', filter: 'id=eq.1' },
+          (payload) => {
+            // Quando houver um UPDATE (ex: Portal enviou justificativa)
+            const newData = payload.new.data as SchoolData;
+            
+            // Só atualiza se for uma mudança externa (evita loops)
+            if (newData.lastUpdated !== data.lastUpdated) {
+              console.log("🔔 Nova notificação recebida em tempo real!");
+              setData(newData);
+              dbService.saveData(newData); // Sincroniza cache local
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [isCloudEnabled, data.lastUpdated]);
 
   const updateData = (newData: Partial<SchoolData>) => {
     setData(prev => ({ 

@@ -997,23 +997,87 @@ app.put('/api/cobrancas/:id', async (req, res) => {
 
 app.get('/api/alunos/:id/carne', async (req, res) => {
   try {
-    // Puxa o último carnê do aluno
-    const { data: cob } = await supabase.from('alunos_cobrancas').select('*').eq('aluno_id', req.params.id).not('asaas_installment_id', 'is', null).order('created_at', { ascending: false }).limit(6);
-    if (!cob || cob.length === 0) return res.status(404).json({ error: 'Nenhum carnê no sistema para este Aluno.' });
+    // Puxa o último carnê do aluno (que tenha installment)
+    const { data: cobs } = await supabase
+      .from('alunos_cobrancas')
+      .select('*')
+      .eq('aluno_id', req.params.id)
+      .not('asaas_installment_id', 'is', null)
+      .order('vencimento', { ascending: false })
+      .limit(1);
+
+    if (!cobs || cobs.length === 0) {
+      return res.status(404).json({ error: 'Nenhum carnê no sistema para este Aluno.' });
+    }
     
-    const latestInstId = cob[0].asaas_installment_id;
+    const latestInstId = cobs[0].asaas_installment_id;
     const asaasTargetInstId = formatInstallmentId(latestInstId);
     
-    const ar = await fetch(`${ASAAS_BASE_URL}/v3/installments/${asaasTargetInstId}`, { headers: { 'access_token': process.env.ASAAS_API_KEY } });
+    // 1. Tenta o PDF único do Asaas via link direto (se disponível no payload original)
+    const ar = await fetch(`${ASAAS_BASE_URL}/v3/installments/${asaasTargetInstId}`, { 
+      headers: { 'access_token': process.env.ASAAS_API_KEY } 
+    });
+    
     if (ar.ok) {
       const data = await ar.json();
-      if (data.paymentBookUrl) return res.status(200).json({ status: 'success', type: 'pdf', url: data.paymentBookUrl });
+      if (data.paymentBookUrl) {
+        return res.status(200).json({ status: 'success', type: 'pdf', url: data.paymentBookUrl });
+      }
     }
 
-    const { data: allCobs } = await supabase.from('alunos_cobrancas').select('*').eq('asaas_installment_id', latestInstId).order('vencimento', { ascending: true });
-    const boletos = (allCobs || []).map((c, i) => ({ id: c.id, numero: i + 1, vencimento: c.vencimento, valor: c.valor, linkBoleto: c.link_boleto, status: c.status, asaasPaymentId: c.asaas_payment_id }));
-    return res.status(200).json({ status: 'success', type: 'fallback', boletos, message: 'PDF unificado não disponível. Acesse os boletos individuais.' });
-  } catch (error) { return res.status(500).json({ error: 'Erro interno.' }); }
+    // 2. Tenta o download do binário do carnê (paymentBook) diretamente do Asaas
+    const binResp = await fetch(`${ASAAS_BASE_URL}/v3/installments/${asaasTargetInstId}/paymentBook`, {
+      headers: { 'access_token': process.env.ASAAS_API_KEY, 'Accept': 'application/pdf' }
+    });
+
+    if (binResp.ok && binResp.headers.get('content-type')?.includes('pdf')) {
+      const arrayBuffer = await binResp.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const fileName = `carne_${asaasTargetInstId}.pdf`;
+
+      // Upload para o Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('carnes')
+        .upload(fileName, buffer, { contentType: 'application/pdf', upsert: true });
+
+      if (!uploadError) {
+        const { data: publicUrlData } = supabase.storage.from('carnes').getPublicUrl(fileName);
+        const publicUrl = publicUrlData.publicUrl;
+        
+        // Atualiza cache no banco
+        await supabase.from('alunos_cobrancas').update({ link_carne: publicUrl }).eq('asaas_installment_id', latestInstId);
+        
+        return res.status(200).json({ status: 'success', type: 'pdf', url: publicUrl });
+      }
+    }
+
+    // 3. Fallback: Lista de boletos individuais
+    const { data: allCobs } = await supabase
+      .from('alunos_cobrancas')
+      .select('*')
+      .eq('asaas_installment_id', latestInstId)
+      .order('vencimento', { ascending: true });
+      
+    const boletos = (allCobs || []).map((c, i) => ({ 
+      id: c.id, 
+      numero: i + 1, 
+      vencimento: c.vencimento, 
+      valor: c.valor, 
+      linkBoleto: c.link_boleto, 
+      status: c.status, 
+      asaasPaymentId: c.asaas_payment_id 
+    }));
+    
+    return res.status(200).json({ 
+      status: 'success', 
+      type: 'fallback', 
+      boletos, 
+      message: 'PDF unificado não disponível. Você pode acessar os boletos individuais.' 
+    });
+  } catch (error) { 
+    console.error('Erro na busca de carnê:', error);
+    return res.status(500).json({ error: 'Erro interno ao processar carnê.' }); 
+  }
 });
 
 // INICIALIZAÇÃO HÍBRIDA (Resolve o Preview do AI Studio e o Portainer)

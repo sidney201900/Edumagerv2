@@ -1242,7 +1242,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => handlePrintCarne(selectedStudentHistory.id)}
+                  onClick={() => checkInstallmentsForStudent(selectedStudentHistory.id)}
                   disabled={isFetchingCarne}
                   className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-all flex items-center gap-2 border border-indigo-100 disabled:opacity-50"
                 >
