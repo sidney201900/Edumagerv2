@@ -382,6 +382,7 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData }) =
                             <th className="px-6 py-3">Horário</th>
                             <th className="px-6 py-3">Status</th>
                             <th className="px-6 py-3">Justificativa</th>
+                            <th className="px-6 py-3 text-center">Anexo</th>
                             <th className="px-6 py-3 text-right">Ação</th>
                           </tr>
                         </thead>
@@ -429,23 +430,27 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData }) =
                                 </td>
                                 <td className="px-6 py-3">
                                   {justMotivo ? (
-                                    <div className="max-w-[200px]">
-                                      <p className="text-xs text-slate-600 truncate" title={justMotivo}>{justMotivo}</p>
-                                      {justAttachment && (
-                                        <button 
-                                          onClick={() => {
-                                            setViewingAttachment(justAttachment!);
-                                            setAttendanceForAttachment(record);
-                                          }}
-                                          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                                          title="Ver Anexo"
-                                        >
-                                          <Paperclip size={16} />
-                                        </button>
-                                      )}
-                                    </div>
+                                    <p className="text-xs text-slate-600 truncate max-w-[200px]" title={justMotivo}>{justMotivo}</p>
                                   ) : (
                                     <span className="text-xs text-slate-300">—</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-3 text-center">
+                                  {justAttachment ? (
+                                    <button 
+                                      onClick={() => {
+                                        setViewingAttachment(justAttachment!);
+                                        setAttendanceForAttachment(record);
+                                      }}
+                                      className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-all animate-pulse shadow-md border border-indigo-200"
+                                      title="Ver Anexo"
+                                    >
+                                      <Paperclip size={18} />
+                                    </button>
+                                  ) : (
+                                    <div className="flex justify-center text-slate-300 opacity-20 grayscale cursor-not-allowed">
+                                      <Paperclip size={18} />
+                                    </div>
                                   )}
                                 </td>
                                 <td className="px-6 py-3 text-right">

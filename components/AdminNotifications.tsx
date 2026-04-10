@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, X, CheckCircle, Trash2, ShieldCheck, FileText } from 'lucide-react';
+import { Bell, X, CheckCircle, Trash2, ShieldCheck, FileText, Paperclip } from 'lucide-react';
 import { SchoolData, Notification, View } from '../types';
 import { dbService } from '../services/dbService';
 
@@ -156,6 +156,19 @@ const AdminNotifications: React.FC<Props> = ({ data, updateData, setView }) => {
                 {adminNotifs.map(notif => {
                   const isJustificativa = notif.title.toLowerCase().includes('justificativa') || notif.message.toLowerCase().includes('justificativa');
                   
+                  let displayMessage = notif.message;
+                  let attachmentFromMessage = null;
+                  
+                  if (notif.message.startsWith('{')) {
+                    try {
+                      const parsed = JSON.parse(notif.message);
+                      displayMessage = parsed.motivo || displayMessage;
+                      attachmentFromMessage = parsed.arquivo_base64 || null;
+                    } catch(e) {}
+                  }
+
+                  const finalAttachment = notif.attachment || attachmentFromMessage;
+
                   return (
                     <div key={notif.id} onClick={() => handleAction(notif)} className={`p-3 rounded-xl border transition-all cursor-pointer relative overflow-hidden group ${notif.read ? 'bg-slate-50 border-transparent opacity-70' : 'bg-white border-indigo-100 hover:border-indigo-300 shadow-sm'}`}>
                       {!notif.read && <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500"></div>}
@@ -163,19 +176,19 @@ const AdminNotifications: React.FC<Props> = ({ data, updateData, setView }) => {
                         <h4 className={`text-sm font-bold ${notif.read ? 'text-slate-600' : 'text-slate-900'}`}>{notif.title}</h4>
                         <span className="text-[9px] font-bold text-slate-400 whitespace-nowrap bg-slate-100 px-1.5 py-0.5 rounded">{new Date(notif.createdAt).toLocaleDateString('pt-BR')}</span>
                       </div>
-                      <p className="text-xs text-slate-500 leading-relaxed mb-2">{notif.message}</p>
+                      <p className="text-xs text-slate-500 leading-relaxed mb-2">{displayMessage}</p>
                       {(!notif.read) && (
                         <div className="flex justify-end mt-2 gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {notif.attachment && (
+                          {finalAttachment && (
                             <button 
                               onClick={(e) => { 
                                 e.stopPropagation(); 
-                                setViewingAttachment(notif.attachment!);
+                                setViewingAttachment(finalAttachment);
                                 setNotifWithAttachment(notif);
                               }}
                               className="text-[10px] font-black uppercase text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg flex items-center gap-1 transition-colors"
                             >
-                              <FileText size={12} /> Ver Documento
+                              <Paperclip size={12} /> Ver Anexo
                             </button>
                           )}
                           {isJustificativa && (

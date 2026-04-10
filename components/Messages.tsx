@@ -56,6 +56,18 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
     return bdayDay === today.getDate() && bdayMonth === (today.getMonth() + 1);
   });
 
+  const monthBirthdayStudents = (data.students || []).filter(s => {
+    if (!s.birthDate || s.status !== 'active') return false;
+    const bdayParts = s.birthDate.split('-');
+    const bdayMonth = parseInt(bdayParts[1]);
+    const today = new Date();
+    return bdayMonth === (today.getMonth() + 1);
+  }).sort((a, b) => {
+    const dayA = parseInt(a.birthDate!.split('-')[2]);
+    const dayB = parseInt(b.birthDate!.split('-')[2]);
+    return dayA - dayB;
+  });
+
   const handleSendBirthdays = async () => {
     if (birthdayStudents.length === 0) return;
     
@@ -345,6 +357,38 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
                 ))}
               </div>
             )}
+          </div>
+
+          <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-lg">
+            <h3 className="font-black text-slate-800 flex items-center gap-2 mb-3">
+              <Cake size={20} className="text-indigo-600" /> Aniversariantes do Mês
+            </h3>
+            <p className="text-sm text-slate-500 mb-5 leading-relaxed">
+              Explorar os <strong>{monthBirthdayStudents.length}</strong> aniversariantes deste mês ({new Date().toLocaleString('pt-BR', { month: 'long' })}).
+            </p>
+            <div className="space-y-1 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+              {monthBirthdayStudents.length > 0 ? (
+                monthBirthdayStudents.map(s => {
+                  const bdayDay = s.birthDate?.split('-')[2];
+                  const today = new Date();
+                  const isToday = parseInt(bdayDay || '0') === today.getDate();
+                  
+                  return (
+                    <div key={s.id} className={`text-[11px] font-bold px-3 py-2 rounded-lg flex justify-between items-center ${isToday ? 'bg-pink-100 text-pink-700 border border-pink-200' : 'bg-slate-50 text-slate-600 border border-slate-100 hover:bg-slate-100'}`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] ${isToday ? 'bg-pink-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                          {bdayDay}
+                        </span>
+                        <span className="truncate max-w-[120px]">{s.name}</span>
+                      </div>
+                      <span className="text-[9px] opacity-60 font-black">{s.phone || s.guardianPhone || 'S/ Tel'}</span>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-center text-[11px] text-slate-400 py-4">Nenhum aniversariante neste mês.</p>
+              )}
+            </div>
           </div>
 
           <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-xl shadow-lg mt-8">
