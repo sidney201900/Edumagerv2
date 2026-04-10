@@ -217,7 +217,7 @@ const AdminNotifications: React.FC<Props> = ({ data, updateData, setView }) => {
       )}
 
       {viewingAttachment && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="p-4 border-b flex items-center justify-between bg-slate-50">
               <h3 className="font-black text-slate-800 flex items-center gap-2">

@@ -372,7 +372,7 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in duration-300">
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in duration-300">
       <div className="bg-slate-50 rounded-2xl w-full max-w-4xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh] animate-slide-up">
         <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-20"></div>
         
@@ -566,7 +566,7 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
 
       {/* Generate Lessons Modal */}
       {showGenerateModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-slide-up">
             <h3 className="text-xl font-black text-slate-800 mb-4">Adicionar Aula Extra</h3>
             
@@ -623,7 +623,7 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
 
       {/* Lesson Details & Cancellation Modal */}
       {showLessonDetail && (
-        <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
+        <div className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
           <div className={`bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl transition-all duration-400 ${isClosing ? 'animate-slide-down-fade-out' : 'animate-slide-up'}`}>
             <div className={`p-6 border-b flex justify-between items-center ${showLessonDetail.status === 'cancelled' ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
               <h3 className="text-xl font-black text-slate-800">Detalhes da Aula</h3>
