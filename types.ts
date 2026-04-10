@@ -86,6 +86,7 @@ export interface Notification {
   message: string;
   read: boolean;
   createdAt: string; // ISO string
+  attachment?: string;
 }
 
 export interface Payment {
@@ -264,6 +265,7 @@ export interface SchoolData {
     boletoGerado: string;
     pagamentoConfirmado: string;
     boletoVencido: string;
+    felizAniversario?: string;
     cobrancaCancelada?: string;
     cobrancaAtualizada?: string;
     automationRules: {

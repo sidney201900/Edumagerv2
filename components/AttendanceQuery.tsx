@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { SchoolData, Attendance, Class, Student } from '../types';
 import { dbService } from '../services/dbService';
 import { useDialog } from '../DialogContext';
-import { Search, Calendar, User, Clock, CheckCircle, XCircle, FileDown, BookOpen, Plus, X, AlertCircle, RefreshCw, ChevronRight } from 'lucide-react';
+import { Search, Calendar, User, Clock, CheckCircle, XCircle, FileDown, BookOpen, Plus, X, AlertCircle, RefreshCw, ChevronRight, Trash2, FileSignature, Paperclip } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { addHeader } from '../services/pdfService';
@@ -28,6 +28,30 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData }) =
   // Absence Form State
   const [absenceStudentId, setAbsenceStudentId] = useState('');
   const [absenceJustification, setAbsenceJustification] = useState('');
+  const [viewingAttachment, setViewingAttachment] = useState<string | null>(null);
+  const [attendanceForAttachment, setAttendanceForAttachment] = useState<Attendance | null>(null);
+
+  const handleDeleteAttachmentRecord = () => {
+    if (!attendanceForAttachment || !attendanceForAttachment.justification) return;
+    
+    try {
+      const parsed = JSON.parse(attendanceForAttachment.justification);
+      delete parsed.arquivo_base64;
+      const updatedJustification = JSON.stringify(parsed);
+      
+      const updatedAttendance = (data.attendance || []).map(a => 
+        a.id === attendanceForAttachment.id ? { ...a, justification: updatedJustification } : a
+      );
+      
+      updateData({ attendance: updatedAttendance });
+      dbService.saveData({ ...data, attendance: updatedAttendance });
+      setViewingAttachment(null);
+      setAttendanceForAttachment(null);
+      showAlert('Sucesso', 'Arquivo removido com sucesso.', 'success');
+    } catch(e) {
+      console.error('Erro ao excluir anexo do registro', e);
+    }
+  };
 
   const closeModal = () => {
     setIsClosing(true);
@@ -408,9 +432,16 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData }) =
                                     <div className="max-w-[200px]">
                                       <p className="text-xs text-slate-600 truncate" title={justMotivo}>{justMotivo}</p>
                                       {justAttachment && (
-                                        <a href={justAttachment} download className="text-[10px] text-indigo-600 font-bold hover:underline flex items-center gap-1 mt-0.5">
-                                          <FileDown size={10} /> Baixar Anexo
-                                        </a>
+                                        <button 
+                                          onClick={() => {
+                                            setViewingAttachment(justAttachment!);
+                                            setAttendanceForAttachment(record);
+                                          }}
+                                          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                          title="Ver Anexo"
+                                        >
+                                          <Paperclip size={16} />
+                                        </button>
                                       )}
                                     </div>
                                   ) : (
@@ -495,6 +526,39 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData }) =
               >
                 Salvar Justificativa
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewingAttachment && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="p-4 border-b flex items-center justify-between bg-slate-50">
+              <h3 className="font-black text-slate-800 flex items-center gap-2">
+                <FileSignature size={20} className="text-indigo-600" /> Visualização do Documento
+              </h3>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleDeleteAttachmentRecord}
+                  className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 flex items-center gap-1.5 transition-colors"
+                >
+                  <Trash2 size={14} /> Excluir Arquivo
+                </button>
+                <button 
+                  onClick={() => { setViewingAttachment(null); setAttendanceForAttachment(null); }}
+                  className="p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-700 rounded-lg transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto bg-slate-200 p-4 flex items-center justify-center">
+              {viewingAttachment.startsWith('data:application/pdf') || viewingAttachment.includes('.pdf') ? (
+                <iframe src={viewingAttachment} className="w-full h-full min-h-[70vh] rounded-lg shadow-sm bg-white" />
+              ) : (
+                <img src={viewingAttachment} className="max-w-full max-h-full object-contain rounded-lg shadow-sm" alt="Documento" />
+              )}
             </div>
           </div>
         </div>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SchoolData } from '../types';
 import { useDialog } from '../DialogContext';
-import { MessageSquare, Save, Info, Settings, Send, Clock, AlertTriangle, FileText, CheckCircle } from 'lucide-react';
+import { MessageSquare, Save, Info, Settings, Send, Clock, AlertTriangle, FileText, CheckCircle, Cake } from 'lucide-react';
 
 interface MessagesProps {
   data: SchoolData;
@@ -14,6 +14,7 @@ const defaultTemplates = {
   boletoVencido: "Olá {nome}, o boleto referente a {descricao} de R$ {valor} venceu em {vencimento}. Segue o PDF da 2ª via atualizada abaixo:",
   cobrancaCancelada: "Olá {nome}, a cobrança referente a {descricao} foi cancelada.",
   cobrancaAtualizada: "Olá {nome}, o boleto de {descricao} foi atualizado. Segue a nova versão:",
+  felizAniversario: "Olá {nome}, a equipe da {escola} passa para te desejar um Feliz Aniversário! Muita saúde, paz e conquistas neste novo ciclo! 🎂🎈",
   automationRules: {
     sendOnDueDate: true,
     sendDaysAfter: '1',
@@ -32,6 +33,7 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
     boletoVencido: defaultVars.boletoVencido || defaultTemplates.boletoVencido,
     cobrancaCancelada: defaultVars.cobrancaCancelada || defaultTemplates.cobrancaCancelada,
     cobrancaAtualizada: defaultVars.cobrancaAtualizada || defaultTemplates.cobrancaAtualizada,
+    felizAniversario: defaultVars.felizAniversario || defaultTemplates.felizAniversario,
     automationRules: {
       sendOnDueDate: initRules.sendOnDueDate !== undefined ? initRules.sendOnDueDate : true,
       sendDaysAfter: initRules.sendDaysAfter || '1',
@@ -46,9 +48,73 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
   const [targetId, setTargetId] = useState('');
   const [messageText, setMessageText] = useState('');
   const [isSendingMass, setIsSendingMass] = useState(false);
+  const [isSendingBdays, setIsSendingBdays] = useState(false);
+
+  const normalizeLineBreaks = (text: string) => text.replace(/\r\n/g, '\n');
+
+  const birthdayStudents = (data.students || []).filter(s => {
+    if (!s.birthDate || s.status !== 'active') return false;
+    const bdayParts = s.birthDate.split('-');
+    const bdayDay = parseInt(bdayParts[2]);
+    const bdayMonth = parseInt(bdayParts[1]);
+    const today = new Date();
+    return bdayDay === today.getDate() && bdayMonth === (today.getMonth() + 1);
+  });
+
+  const handleSendBirthdays = async () => {
+    if (birthdayStudents.length === 0) return;
+    
+    showConfirm(
+      'Enviar Felicitações',
+      `Deseja enviar a mensagem de aniversário para os ${birthdayStudents.length} alunos que fazem aniversário hoje?`,
+      async () => {
+        setIsSendingBdays(true);
+        try {
+          const payloadAlunos = birthdayStudents.map(s => {
+            const nome = s.name.split(' ')[0];
+            const telefone = s.phone || s.guardianPhone;
+            return { nome, telefone };
+          }).filter(a => a.telefone);
+
+          if (payloadAlunos.length === 0) {
+            showAlert('Aviso', 'Nenhum dos aniversariantes possui telefone cadastrado.', 'warning');
+            return;
+          }
+
+          const msgTemplate = normalizeLineBreaks(templates.felizAniversario).replace(/{escola}/g, data.profile.name);
+
+          const resp = await fetch('/api/enviar-massa', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ alunos: payloadAlunos, mensagem: msgTemplate })
+          });
+          
+          if (resp.ok) {
+            showAlert('Sucesso', 'O disparo das mensagens de aniversário foi iniciado!', 'success');
+          } else {
+            const resData = await resp.json();
+            showAlert('Erro', resData.error || 'Erro ao iniciar disparo.', 'error');
+          }
+        } catch (e) {
+          showAlert('Erro', 'Erro de conexão.', 'error');
+        } finally {
+          setIsSendingBdays(false);
+        }
+      }
+    );
+  };
 
   const handleSave = () => {
-    updateData({ messageTemplates: templates });
+    const normalizedTemplates = {
+      ...templates,
+      boletoGerado: normalizeLineBreaks(templates.boletoGerado),
+      pagamentoConfirmado: normalizeLineBreaks(templates.pagamentoConfirmado),
+      boletoVencido: normalizeLineBreaks(templates.boletoVencido),
+      cobrancaCancelada: normalizeLineBreaks(templates.cobrancaCancelada),
+      cobrancaAtualizada: normalizeLineBreaks(templates.cobrancaAtualizada),
+      felizAniversario: normalizeLineBreaks(templates.felizAniversario)
+    };
+    updateData({ messageTemplates: normalizedTemplates });
     showAlert('Sucesso', 'Configurações de mensagens salvas com sucesso!', 'success');
   };
 
@@ -117,7 +183,7 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
       const resp = await fetch('/api/enviar-massa', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ alunos: payloadAlunos, mensagem: messageText })
+        body: JSON.stringify({ alunos: payloadAlunos, mensagem: normalizeLineBreaks(messageText) })
       });
       const resData = await resp.json();
       
@@ -167,6 +233,7 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
               <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> <code className="bg-white/60 px-2 py-0.5 rounded text-indigo-900">{'{valor}'}</code> - Valor da cobrança</li>
               <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> <code className="bg-white/60 px-2 py-0.5 rounded text-indigo-900">{'{vencimento}'}</code> - Data de Vencimento</li>
               <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> <code className="bg-white/60 px-2 py-0.5 rounded text-indigo-900">{'{link_boleto}'}</code> - Link para PDF/Pgto</li>
+              <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> <code className="bg-white/60 px-2 py-0.5 rounded text-indigo-900">{'{escola}'}</code> - Nome da Escola</li>
             </ul>
           </div>
 
@@ -243,6 +310,45 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
             </button>
             {!data.evolutionConfig?.apiUrl && (
               <p className="mt-3 text-xs text-amber-700 text-center font-medium">Configure a Evolution API nas Configurações.</p>
+            )}
+          </div>
+
+          <div className="bg-gradient-to-br from-pink-50 to-rose-50 border border-pink-200 p-6 rounded-xl shadow-lg">
+            <h3 className="font-black text-pink-800 flex items-center gap-2 mb-3">
+              <Cake size={20} /> Aniversariantes do Dia
+            </h3>
+            <p className="text-sm text-pink-700/80 mb-5 leading-relaxed">
+              O sistema identificou <strong>{birthdayStudents.length}</strong> alunos fazendo aniversário hoje ({new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}).
+            </p>
+            <button 
+              onClick={handleSendBirthdays}
+              disabled={isSendingBdays || birthdayStudents.length === 0 || !data.evolutionConfig?.apiUrl}
+              className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm text-white shadow-md transition-all ${
+                isSendingBdays || birthdayStudents.length === 0 || !data.evolutionConfig?.apiUrl
+                ? 'bg-slate-400 cursor-not-allowed' 
+                : 'bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 hover:scale-[1.02]'
+              }`}
+            >
+              {isSendingBdays ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  Processando...
+                </>
+              ) : (
+                <>
+                  <Cake size={18} /> Parabenizar Aniversariantes Now
+                </>
+              )}
+            </button>
+            {birthdayStudents.length > 0 && (
+              <div className="mt-4 space-y-1 max-h-32 overflow-y-auto">
+                {birthdayStudents.map(s => (
+                  <div key={s.id} className="text-[11px] font-bold text-pink-600 bg-white/40 px-2 py-1 rounded flex justify-between">
+                    <span>{s.name}</span>
+                    <span className="opacity-60">{s.phone || s.guardianPhone || 'S/ Tel'}</span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
@@ -417,6 +523,25 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
               rows={4}
               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 resize-y text-slate-700 text-sm font-medium"
             />
+          </div>
+
+          <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-xl border-t-4 border-t-pink-500">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-full bg-pink-50 flex items-center justify-center text-pink-600">
+                <Cake size={20} />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800 text-lg">Feliz Aniversário</h3>
+                <p className="text-[11px] font-bold text-pink-500 uppercase tracking-widest">Mensagem para os aniversariantes do dia</p>
+              </div>
+            </div>
+            <textarea 
+              value={templates.felizAniversario}
+              onChange={(e) => setTemplates(p => ({ ...p, felizAniversario: e.target.value }))}
+              rows={4}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 resize-y text-slate-700 text-sm font-medium"
+            />
+            <p className="mt-3 text-[11px] text-slate-500 font-medium">Use {"{nome}"} para o nome do aluno e {"{escola}"} para o nome da escola.</p>
           </div>
 
         </div>

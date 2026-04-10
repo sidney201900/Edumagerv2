@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, X, CheckCircle, Trash2, ShieldCheck } from 'lucide-react';
+import { Bell, X, CheckCircle, Trash2, ShieldCheck, FileText } from 'lucide-react';
 import { SchoolData, Notification, View } from '../types';
 import { dbService } from '../services/dbService';
 
@@ -11,8 +11,23 @@ interface Props {
 
 const AdminNotifications: React.FC<Props> = ({ data, updateData, setView }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [viewingAttachment, setViewingAttachment] = useState<string | null>(null);
+  const [notifWithAttachment, setNotifWithAttachment] = useState<Notification | null>(null);
   const prevCountRef = useRef<number>(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const handleDeleteAttachment = () => {
+    if (!notifWithAttachment) return;
+    
+    const updatedNotifs = (data.notifications || []).map(n => 
+      n.id === notifWithAttachment.id ? { ...n, attachment: undefined } : n
+    );
+    
+    updateData({ notifications: updatedNotifs });
+    dbService.saveData({ ...data, notifications: updatedNotifs });
+    setViewingAttachment(null);
+    setNotifWithAttachment(null);
+  };
 
   const adminNotifs = (data.notifications || []).filter(n => n.studentId === 'admin').sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const unreadCount = adminNotifs.filter(n => !n.read).length;
@@ -151,6 +166,18 @@ const AdminNotifications: React.FC<Props> = ({ data, updateData, setView }) => {
                       <p className="text-xs text-slate-500 leading-relaxed mb-2">{notif.message}</p>
                       {(!notif.read) && (
                         <div className="flex justify-end mt-2 gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {notif.attachment && (
+                            <button 
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                setViewingAttachment(notif.attachment!);
+                                setNotifWithAttachment(notif);
+                              }}
+                              className="text-[10px] font-black uppercase text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg flex items-center gap-1 transition-colors"
+                            >
+                              <FileText size={12} /> Ver Documento
+                            </button>
+                          )}
                           {isJustificativa && (
                             <button 
                               onClick={(e) => { e.stopPropagation(); handleAcceptJustification(notif); }}
@@ -172,6 +199,39 @@ const AdminNotifications: React.FC<Props> = ({ data, updateData, setView }) => {
                 })}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {viewingAttachment && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="p-4 border-b flex items-center justify-between bg-slate-50">
+              <h3 className="font-black text-slate-800 flex items-center gap-2">
+                <FileText size={20} className="text-indigo-600" /> Visualização do Documento
+              </h3>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleDeleteAttachment}
+                  className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 flex items-center gap-1.5 transition-colors"
+                >
+                  <Trash2 size={14} /> Excluir Arquivo
+                </button>
+                <button 
+                  onClick={() => { setViewingAttachment(null); setNotifWithAttachment(null); }}
+                  className="p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-700 rounded-lg transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto bg-slate-200 p-4 flex items-center justify-center">
+              {viewingAttachment.startsWith('data:application/pdf') || viewingAttachment.includes('.pdf') ? (
+                <iframe src={viewingAttachment} className="w-full h-full min-h-[70vh] rounded-lg shadow-sm bg-white" />
+              ) : (
+                <img src={viewingAttachment} className="max-w-full max-h-full object-contain rounded-lg shadow-sm" alt="Documento" />
+              )}
+            </div>
           </div>
         </div>
       )}
