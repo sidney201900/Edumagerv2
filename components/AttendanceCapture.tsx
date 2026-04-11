@@ -222,7 +222,7 @@ const AttendanceCapture: React.FC<AttendanceCaptureProps> = ({ data, updateData 
       const attDate = new Date(a.date);
       const isSameDay = attDate.toDateString() === now.toDateString();
       const diffMs = Math.abs(now.getTime() - attDate.getTime());
-      return isSameDay && diffMs < (60 * 60 * 1000); // Intervalo de 1h
+      return isSameDay && diffMs < (5 * 60 * 1000); // Intervalo de 5 minutos
     });
 
     if (alreadyPresent) {
