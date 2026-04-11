@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SchoolData, Attendance, Class, Student } from '../types';
 import { dbService } from '../services/dbService';
 import { useDialog } from '../DialogContext';
@@ -11,10 +11,27 @@ import SearchableSelect from './SearchableSelect';
 interface AttendanceQueryProps {
   data: SchoolData;
   updateData: (newData: Partial<SchoolData>) => void;
+  deepLinkStudentId?: string | null;
+  clearDeepLink?: () => void;
 }
 
-const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData }) => {
+const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, deepLinkStudentId, clearDeepLink }) => {
   const { showAlert } = useDialog();
+
+  useEffect(() => {
+    if (deepLinkStudentId) {
+      const student = data.students.find(s => s.id === deepLinkStudentId);
+      if (student) {
+        const classObj = data.classes.find(c => c.id === student.classId);
+        if (classObj) {
+          setSelectedClass(classObj);
+          setSelectedStudent(student);
+          setShowStudentHistoryModal(true);
+          if (clearDeepLink) clearDeepLink();
+        }
+      }
+    }
+  }, [deepLinkStudentId, data.students, data.classes, clearDeepLink]);
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [showStudentListModal, setShowStudentListModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -324,8 +341,8 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData }) =
                   )}
                 </div>
                 <div>
-                  <h3 className="text-lg font-black text-slate-800">{selectedStudent.name}</h3>
-                  <p className="text-xs text-slate-500 font-medium">Histórico de Frequência • {selectedClass.name}</p>
+                  <h3 className="text-xl font-black text-slate-800">{selectedStudent.name}</h3>
+                  <p className="text-sm text-slate-500 font-medium">Histórico de Frequência • {selectedClass.name}</p>
                 </div>
               </div>
               <button 
@@ -358,9 +375,9 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData }) =
                 return (
                   <>
                     {/* Summary bar */}
-                    <div className="p-4 bg-slate-50 border-b border-slate-100 flex flex-wrap gap-4 text-xs font-bold">
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg">
-                        <CheckCircle size={14} /> {presences} Presenças
+                    <div className="p-4 bg-slate-50 border-b border-slate-100 flex flex-wrap gap-4 text-sm font-bold">
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg">
+                        <CheckCircle size={16} /> {presences} Presenças
                       </div>
                       <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-700 rounded-lg">
                         <XCircle size={14} /> {absences} Faltas
@@ -378,12 +395,12 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData }) =
                       <table className="w-full text-left">
                         <thead className="bg-slate-50 text-slate-500 text-[10px] uppercase font-bold tracking-wider sticky top-0">
                           <tr>
-                            <th className="px-6 py-3">Data</th>
-                            <th className="px-6 py-3">Horário</th>
-                            <th className="px-6 py-3">Status</th>
-                            <th className="px-6 py-3">Justificativa</th>
-                            <th className="px-6 py-3 text-center">Anexo</th>
-                            <th className="px-6 py-3 text-right">Ação</th>
+                            <th className="px-6 py-4 text-sm">Data</th>
+                            <th className="px-6 py-4 text-sm">Horário</th>
+                            <th className="px-6 py-4 text-sm">Status</th>
+                            <th className="px-6 py-4 text-sm">Justificativa</th>
+                            <th className="px-6 py-4 text-sm text-center">Anexo</th>
+                            <th className="px-6 py-4 text-sm text-right">Ação</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
@@ -407,32 +424,32 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData }) =
 
                             return (
                               <tr key={record.id} className="hover:bg-slate-50/50 transition-colors">
-                                <td className="px-6 py-3 text-sm font-bold text-slate-800">
+                                <td className="px-6 py-4 text-base font-bold text-slate-800">
                                   {recordDate.toLocaleDateString('pt-BR')}
                                 </td>
-                                <td className="px-6 py-3 text-sm text-slate-500 flex items-center gap-1.5">
-                                  <Clock size={12} /> {time}
+                                <td className="px-6 py-4 text-sm text-slate-500 flex items-center gap-1.5 pt-5">
+                                  <Clock size={14} /> {time}
                                 </td>
-                                <td className="px-6 py-3">
+                                <td className="px-6 py-4">
                                   {isJustified ? (
-                                    <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
-                                      <AlertCircle size={10} /> Falta Justificada
+                                    <span className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-full text-xs font-black uppercase tracking-wider inline-flex items-center gap-1.5">
+                                      <AlertCircle size={12} /> Falta Justificada
                                     </span>
                                   ) : isAbsence ? (
-                                    <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
-                                      <XCircle size={10} /> Falta
+                                    <span className="px-3 py-1.5 bg-red-100 text-red-700 rounded-full text-xs font-black uppercase tracking-wider inline-flex items-center gap-1.5">
+                                      <XCircle size={12} /> Falta
                                     </span>
                                   ) : (
-                                    <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
-                                      <CheckCircle size={10} /> Presente
+                                    <span className="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-black uppercase tracking-wider inline-flex items-center gap-1.5">
+                                      <CheckCircle size={12} /> Presente
                                     </span>
                                   )}
                                 </td>
-                                <td className="px-6 py-3">
+                                <td className="px-6 py-4">
                                   {justMotivo ? (
-                                    <p className="text-xs text-slate-600 truncate max-w-[200px]" title={justMotivo}>{justMotivo}</p>
+                                    <p className="text-sm text-slate-600 truncate max-w-[200px]" title={justMotivo}>{justMotivo}</p>
                                   ) : (
-                                    <span className="text-xs text-slate-300">—</span>
+                                    <span className="text-sm text-slate-300">—</span>
                                   )}
                                 </td>
                                 <td className="px-6 py-3 text-center">

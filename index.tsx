@@ -28,6 +28,7 @@ const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<View>(View.Dashboard);
+  const [deepLinkStudentId, setDeepLinkStudentId] = useState<string | null>(null);
   // Initial load from LocalStorage for speed (fallback), then IDB
   const [data, setData] = useState<SchoolData>(dbService.getData());
   
@@ -185,7 +186,7 @@ const App = () => {
       case View.Attendance:
         return <AttendanceCapture data={data} updateData={updateData} />;
       case View.AttendanceQuery:
-        return <AttendanceQuery data={data} updateData={updateData} />;
+        return <AttendanceQuery data={data} updateData={updateData} deepLinkStudentId={deepLinkStudentId} clearDeepLink={() => setDeepLinkStudentId(null)} />;
       case View.ReportCard:
         return <ReportCard data={data} updateData={updateData} />;
       case View.Handouts:
@@ -241,7 +242,7 @@ const App = () => {
         )}
 
         <div className="max-w-7xl mx-auto p-4 md:p-8">
-          <AdminNotifications data={data} updateData={updateData} setView={setCurrentView} />
+          <AdminNotifications data={data} updateData={updateData} setView={setCurrentView} onNavigateToStudent={handleNavigateToStudent} />
           {renderView()}
         </div>
       </main>

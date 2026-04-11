@@ -237,6 +237,7 @@ const AttendanceCapture: React.FC<AttendanceCaptureProps> = ({ data, updateData 
       classId: detectedClassId,
       date: new Date().toISOString(),
       photo: capturedImage,
+      type: 'presence',
       verified: true
     };
 

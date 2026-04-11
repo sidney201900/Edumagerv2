@@ -7,9 +7,10 @@ interface Props {
   data: SchoolData;
   updateData: (newData: Partial<SchoolData>) => void;
   setView: (view: View) => void;
+  onNavigateToStudent?: (studentId: string) => void;
 }
 
-const AdminNotifications: React.FC<Props> = ({ data, updateData, setView }) => {
+const AdminNotifications: React.FC<Props> = ({ data, updateData, setView, onNavigateToStudent }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [viewingAttachment, setViewingAttachment] = useState<string | null>(null);
   const [notifWithAttachment, setNotifWithAttachment] = useState<Notification | null>(null);
@@ -173,12 +174,41 @@ const AdminNotifications: React.FC<Props> = ({ data, updateData, setView }) => {
                     <div key={notif.id} onClick={() => handleAction(notif)} className={`p-3 rounded-xl border transition-all cursor-pointer relative overflow-hidden group ${notif.read ? 'bg-slate-50 border-transparent opacity-70' : 'bg-white border-indigo-100 hover:border-indigo-300 shadow-sm'}`}>
                       {!notif.read && <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500"></div>}
                       <div className="flex justify-between items-start mb-1 gap-4">
-                        <h4 className={`text-sm font-bold ${notif.read ? 'text-slate-600' : 'text-slate-900'}`}>{notif.title}</h4>
-                        <span className="text-[9px] font-bold text-slate-400 whitespace-nowrap bg-slate-100 px-1.5 py-0.5 rounded">{new Date(notif.createdAt).toLocaleDateString('pt-BR')}</span>
+                        <h4 className={`text-base font-black tracking-tight ${notif.read ? 'text-slate-400' : 'text-emerald-500 animate-pulse'}`}>
+                          {notif.title}
+                        </h4>
+                        <span className={`text-[10px] font-bold whitespace-nowrap px-2 py-1 rounded ${notif.read ? 'bg-slate-100 text-slate-400' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                          {new Date(notif.createdAt).toLocaleDateString('pt-BR')}
+                        </span>
                       </div>
-                      <p className="text-xs text-slate-500 leading-relaxed mb-2">{displayMessage}</p>
+                      <p className={`text-sm font-medium leading-relaxed mb-2 ${notif.read ? 'text-slate-400' : 'text-emerald-600/90'}`}>
+                        {displayMessage}
+                      </p>
                       {(!notif.read) && (
                         <div className="flex justify-end mt-2 gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {isJustificativa && (
+                            <button 
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                if (onNavigateToStudent) {
+                                  onNavigateToStudent(notif.studentId);
+                                } else {
+                                  setView(View.AttendanceQuery);
+                                }
+                              }}
+                              className="text-[10px] font-black uppercase text-amber-600 bg-amber-50 hover:bg-amber-100 px-2 py-1 rounded-lg flex items-center gap-1 transition-colors"
+                            >
+                              <ShieldCheck size={12} /> Ver Histórico
+                            </button>
+                          )}
+                          {isJustificativa && (
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleAcceptJustification(notif); }}
+                              className="text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 hover:emerald-100 px-2 py-1 rounded-lg flex items-center gap-1 transition-colors"
+                            >
+                              <CheckCircle size={12} /> Aceitar
+                            </button>
+                          )}
                           {finalAttachment && (
                             <button 
                               onClick={(e) => { 
@@ -189,14 +219,6 @@ const AdminNotifications: React.FC<Props> = ({ data, updateData, setView }) => {
                               className="text-[10px] font-black uppercase text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg flex items-center gap-1 transition-colors"
                             >
                               <Paperclip size={12} /> Ver Anexo
-                            </button>
-                          )}
-                          {isJustificativa && (
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); handleAcceptJustification(notif); }}
-                              className="text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-lg flex items-center gap-1 transition-colors"
-                            >
-                              <ShieldCheck size={12} /> Aceitar
                             </button>
                           )}
                           <button 
