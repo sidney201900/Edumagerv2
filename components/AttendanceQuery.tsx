@@ -369,33 +369,26 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                   const hasRecord = actualRecords.some(a => a.date.startsWith(lesson.date));
                   
                   if (!hasRecord) {
-                    const lessonDate = new Date(lesson.date + 'T12:00:00Z');
-                    // Calculate difference in days. 1 day = 86400000ms
-                    const diffMs = now.getTime() - lessonDate.getTime();
-                    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+                    const [endHours, endMinutes] = (lesson.endTime || '23:59').split(':');
+                    const lessonEnd = new Date(lesson.date + 'T' + (lesson.endTime || '23:59') + ':00');
+                    
+                    // Difference in milliseconds
+                    const diffMs = now.getTime() - lessonEnd.getTime();
 
-                    if (diffDays >= -1) { // Starting from 1 day before
-                      if (diffDays <= 1) {
-                        // Window: 1 day before to 1 day after
-                        virtualRecords.push({
-                          id: `v-${lesson.id}`,
-                          studentId: selectedStudent.id,
-                          classId: selectedClass.id,
-                          date: lesson.date,
-                          type: 'awaiting',
-                          isVirtual: true
-                        });
-                      } else {
-                        // After 1 day
-                        virtualRecords.push({
-                          id: `v-${lesson.id}`,
-                          studentId: selectedStudent.id,
-                          classId: selectedClass.id,
-                          date: lesson.date,
-                          type: 'absence',
-                          isVirtual: true
-                        });
-                      }
+                    // Only show if lesson is today or in the past
+                    if (diffMs > - (24 * 60 * 60 * 1000)) { // 1 day before lesson end
+                      const isFinished = diffMs > 0;
+                      const isRecent = diffMs <= (24 * 60 * 60 * 1000);
+
+                      virtualRecords.push({
+                        id: `v-${lesson.id}`,
+                        studentId: selectedStudent.id,
+                        classId: selectedClass.id,
+                        date: lesson.date,
+                        type: isFinished ? 'absence' : 'awaiting',
+                        isVirtual: true,
+                        awaiting: isRecent // Show note if finished < 24h OR if not finished yet
+                      });
                     }
                   }
                 });
@@ -415,7 +408,6 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                 const presences = studentRecords.filter(a => a.type === 'presence' || (!a.type && !a.isVirtual)).length;
                 const absences = studentRecords.filter(a => a.type === 'absence').length;
                 const justified = studentRecords.filter(a => a.type === 'absence' && a.justificationAccepted).length;
-                const awaits = studentRecords.filter(a => a.type === 'awaiting').length;
 
                 return (
                   <>
@@ -433,11 +425,6 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                       <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg">
                         <BookOpen size={14} /> {studentRecords.length} Aulas
                       </div>
-                      {awaits > 0 && (
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg animate-pulse">
-                          <Clock size={14} /> {awaits} Aguardando Justificativa
-                        </div>
-                      )}
                     </div>
 
                     {/* Attendance table */}
@@ -472,6 +459,7 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                             const isAwaiting = record.type === 'awaiting';
                             const isJustified = isAbsence && record.justificationAccepted;
                             const hasPendingJustification = isAbsence && record.justification && !record.justificationAccepted;
+                            const isPendente = record.awaiting;
 
                             return (
                               <tr key={record.id} className="hover:bg-slate-50/50 transition-colors">
@@ -490,10 +478,17 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                                     <span className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-full text-xs font-black uppercase tracking-wider inline-flex items-center gap-1.5">
                                       <AlertCircle size={12} /> Falta Justificada
                                     </span>
-                                  ) : isAbsence ? (
-                                    <span className="px-3 py-1.5 bg-red-100 text-red-700 rounded-full text-xs font-black uppercase tracking-wider inline-flex items-center gap-1.5">
-                                      <XCircle size={12} /> Falta
-                                    </span>
+                                  ) : (isAbsence || isPendente) ? (
+                                    <div className="flex flex-col gap-1">
+                                      <span className="px-3 py-1.5 bg-red-100 text-red-700 rounded-full text-xs font-black uppercase tracking-wider inline-flex items-center gap-1.5">
+                                        <XCircle size={12} /> Falta
+                                      </span>
+                                      {isPendente && (
+                                        <span className="text-[9px] font-bold text-amber-600 uppercase flex items-center gap-1 px-1">
+                                          <Clock size={10} /> Aguardando Justificativa
+                                        </span>
+                                      )}
+                                    </div>
                                   ) : (
                                     <span className="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-black uppercase tracking-wider inline-flex items-center gap-1.5">
                                       <CheckCircle size={12} /> Presente
@@ -501,8 +496,8 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                                   )}
                                 </td>
                                 <td className="px-6 py-4">
-                                  {isAwaiting ? (
-                                    <span className="text-xs italic text-indigo-400">Aula recente, aguardando portal...</span>
+                                  {isAwaiting || isPendente ? (
+                                    <span className="text-xs italic text-indigo-400">Aguardando registro ou justificativa...</span>
                                   ) : justMotivo ? (
                                     <p className="text-sm text-slate-600 truncate max-w-[200px]" title={justMotivo}>{justMotivo}</p>
                                   ) : (
