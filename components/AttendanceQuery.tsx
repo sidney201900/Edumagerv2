@@ -355,22 +355,67 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
 
             <div className="flex-1 overflow-y-auto">
               {(() => {
-                const studentRecords = (data.attendance || [])
-                  .filter(a => a.studentId === selectedStudent.id && a.classId === selectedClass.id)
+                const now = new Date();
+                const actualRecords = (data.attendance || [])
+                  .filter(a => a.studentId === selectedStudent.id && a.classId === selectedClass.id);
+                
+                const classLessons = (data.lessons || [])
+                  .filter(l => l.classId === selectedClass.id && l.status !== 'cancelled');
+
+                const virtualRecords: any[] = [];
+                
+                classLessons.forEach(lesson => {
+                  // Check if there's any record (presence or absence) for this date
+                  const hasRecord = actualRecords.some(a => a.date.startsWith(lesson.date));
+                  
+                  if (!hasRecord) {
+                    const lessonDate = new Date(lesson.date + 'T12:00:00Z');
+                    // Calculate difference in days. 1 day = 86400000ms
+                    const diffMs = now.getTime() - lessonDate.getTime();
+                    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+                    if (diffDays >= -1) { // Starting from 1 day before
+                      if (diffDays <= 1) {
+                        // Window: 1 day before to 1 day after
+                        virtualRecords.push({
+                          id: `v-${lesson.id}`,
+                          studentId: selectedStudent.id,
+                          classId: selectedClass.id,
+                          date: lesson.date,
+                          type: 'awaiting',
+                          isVirtual: true
+                        });
+                      } else {
+                        // After 1 day
+                        virtualRecords.push({
+                          id: `v-${lesson.id}`,
+                          studentId: selectedStudent.id,
+                          classId: selectedClass.id,
+                          date: lesson.date,
+                          type: 'absence',
+                          isVirtual: true
+                        });
+                      }
+                    }
+                  }
+                });
+
+                const studentRecords = [...actualRecords, ...virtualRecords]
                   .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
                 if (studentRecords.length === 0) {
                   return (
                     <div className="text-center py-16 text-slate-400">
                       <Calendar size={48} className="mx-auto mb-4 opacity-20" />
-                      <p className="font-bold">Nenhum registro de frequência para este aluno.</p>
+                      <p className="font-bold">Nenhum registro de frequência ou aula agendada.</p>
                     </div>
                   );
                 }
 
-                const presences = studentRecords.filter(a => a.type !== 'absence').length;
+                const presences = studentRecords.filter(a => a.type === 'presence' || (!a.type && !a.isVirtual)).length;
                 const absences = studentRecords.filter(a => a.type === 'absence').length;
                 const justified = studentRecords.filter(a => a.type === 'absence' && a.justificationAccepted).length;
+                const awaits = studentRecords.filter(a => a.type === 'awaiting').length;
 
                 return (
                   <>
@@ -386,8 +431,13 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                         <AlertCircle size={14} /> {justified} Justificadas
                       </div>
                       <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg">
-                        <BookOpen size={14} /> {studentRecords.length} Total
+                        <BookOpen size={14} /> {studentRecords.length} Aulas
                       </div>
+                      {awaits > 0 && (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg animate-pulse">
+                          <Clock size={14} /> {awaits} Aguardando Justificativa
+                        </div>
+                      )}
                     </div>
 
                     {/* Attendance table */}
@@ -419,6 +469,7 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                             }
 
                             const isAbsence = record.type === 'absence';
+                            const isAwaiting = record.type === 'awaiting';
                             const isJustified = isAbsence && record.justificationAccepted;
                             const hasPendingJustification = isAbsence && record.justification && !record.justificationAccepted;
 
@@ -428,10 +479,14 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                                   {recordDate.toLocaleDateString('pt-BR')}
                                 </td>
                                 <td className="px-6 py-4 text-sm text-slate-500 flex items-center gap-1.5 pt-5">
-                                  <Clock size={14} /> {time}
+                                  <Clock size={14} /> {record.isVirtual ? "--:--" : time}
                                 </td>
                                 <td className="px-6 py-4">
-                                  {isJustified ? (
+                                  {isAwaiting ? (
+                                    <span className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-full text-xs font-black uppercase tracking-wider inline-flex items-center gap-1.5 animate-pulse">
+                                      <Clock size={12} /> Aguardando Justificativa
+                                    </span>
+                                  ) : isJustified ? (
                                     <span className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-full text-xs font-black uppercase tracking-wider inline-flex items-center gap-1.5">
                                       <AlertCircle size={12} /> Falta Justificada
                                     </span>
@@ -446,13 +501,15 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                                   )}
                                 </td>
                                 <td className="px-6 py-4">
-                                  {justMotivo ? (
+                                  {isAwaiting ? (
+                                    <span className="text-xs italic text-indigo-400">Aula recente, aguardando portal...</span>
+                                  ) : justMotivo ? (
                                     <p className="text-sm text-slate-600 truncate max-w-[200px]" title={justMotivo}>{justMotivo}</p>
                                   ) : (
                                     <span className="text-sm text-slate-300">—</span>
                                   )}
                                 </td>
-                                <td className="px-6 py-3 text-center">
+                                <td className="px-6 py-4 text-center">
                                   {justAttachment ? (
                                     <button 
                                       onClick={() => {
@@ -465,12 +522,10 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                                       <Paperclip size={18} />
                                     </button>
                                   ) : (
-                                    <div className="flex justify-center text-slate-300 opacity-20 grayscale cursor-not-allowed">
-                                      <Paperclip size={18} />
-                                    </div>
+                                    <span className="text-sm text-slate-200"><Paperclip size={18} /></span>
                                   )}
                                 </td>
-                                <td className="px-6 py-3 text-right">
+                                <td className="px-6 py-4 text-right">
                                   {hasPendingJustification && (
                                     <button 
                                       onClick={() => {
