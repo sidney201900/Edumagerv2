@@ -167,6 +167,11 @@ const App = () => {
     }
   };
 
+  const handleNavigateToStudent = (studentId: string) => {
+    setDeepLinkStudentId(studentId);
+    setCurrentView(View.AttendanceQuery);
+  };
+
   const renderView = () => {
     switch (currentView) {
       case View.Dashboard:
