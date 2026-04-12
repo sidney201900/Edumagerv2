@@ -177,9 +177,6 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
     }
   };
 
-    setQuickTimeClass(null);
-    showAlert('Sucesso', 'Horário alterado para a turma e todas as aulas futuras atualizadas!', 'success');
-  };
 
   const handleQuickTimeSave = () => {
     if (!quickTimeClass || !quickStartTime || !quickEndTime) {
