@@ -13,11 +13,9 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// === ASAAS: URL base dinâmica (Sandbox ou Produção) ===
-// Para migrar para produção, basta alterar ASAAS_API_URL no Portainer
-// Sandbox: https://sandbox.asaas.com/api
-// Produção: https://api.asaas.com
-const ASAAS_BASE_URL = process.env.ASAAS_API_URL || 'https://sandbox.asaas.com/api';
+// === ASAAS: URL base dinâmica inteligente ===
+const ASAAS_KEY = process.env.ASAAS_API_KEY || '';
+const ASAAS_BASE_URL = process.env.ASAAS_API_URL || (ASAAS_KEY.startsWith('$a') ? 'https://api.asaas.com' : 'https://sandbox.asaas.com/api');
 
 app.use(express.json());
 app.use(cors());
@@ -489,7 +487,7 @@ app.post('/api/gerar_cobranca', async (req, res) => {
   try {
     const { 
       aluno_id, nome, cpf, email, valor, vencimento, multa, juros, desconto,
-      telefone, cep, endereco, numero, bairro, descricao, parcelas
+      telefone, cep, endereco, numero, bairro, descricao, parcelas, nascimento
     } = req.body;
 
     // 1. Search or Create Asaas Customer
@@ -525,7 +523,8 @@ app.post('/api/gerar_cobranca', async (req, res) => {
           postalCode: cep,
           address: endereco,
           addressNumber: numero,
-          province: bairro
+          province: bairro,
+          birthDate: nascimento
         })
       });
 
