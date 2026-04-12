@@ -600,7 +600,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
           nome: finalName,
           cpf: finalCpf,
           email: student.email,
-          valor: formData.amount,
+          valor: formData.amount * manualInstallments,
           vencimento: isoDueDate,
           multa: formData.fine,
           juros: formData.interest,
