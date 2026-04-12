@@ -413,16 +413,16 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
 
       let typeMatch = true;
       if (filterType === 'avulsas') {
-        typeMatch = !p.installmentId;
+        typeMatch = !p.installmentId && !p.asaasInstallmentId;
       } else if (filterType === 'parcelamentos') {
-        typeMatch = !!p.installmentId;
+        typeMatch = !!p.installmentId || !!p.asaasInstallmentId;
       }
 
       return statusMatch && studentMatch && classMatch && typeMatch;
     })
     .sort((a, b) => {
-      const keyA = maxIndexMap.get(a.installmentId || a.id) || 0;
-      const keyB = maxIndexMap.get(b.installmentId || b.id) || 0;
+      const keyA = maxIndexMap.get(a.installmentId || a.asaasInstallmentId || a.id) || 0;
+      const keyB = maxIndexMap.get(b.installmentId || b.asaasInstallmentId || b.id) || 0;
       if (keyA !== keyB) return keyB - keyA;
       return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
     });
@@ -432,9 +432,10 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
 
     const groups: Record<string, Payment[]> = {};
     filteredPayments.forEach(p => {
-      if (p.installmentId) {
-        if (!groups[p.installmentId]) groups[p.installmentId] = [];
-        groups[p.installmentId].push(p);
+      const groupKey = p.installmentId || p.asaasInstallmentId;
+      if (groupKey) {
+        if (!groups[groupKey]) groups[groupKey] = [];
+        groups[groupKey].push(p);
       }
     });
 
@@ -619,7 +620,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
           nome: finalName,
           cpf: finalCpf,
           email: student.email,
-          valor: formData.amount * manualInstallments,
+          valor: formData.amount,
           vencimento: isoDueDate,
           multa: formData.fine,
           juros: formData.interest,
@@ -1129,9 +1130,9 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
                                     )}
                                   </>
                                 )}
-                                {(payment.installmentId || payment.asaasInstallmentId || group.installmentId) && (
+                                {(payment.installmentId || payment.asaasInstallmentId) && (
                                   <button
-                                    onClick={() => executePrintCarne(payment.installmentId || payment.asaasInstallmentId || group.installmentId)}
+                                    onClick={() => executePrintCarne(payment.installmentId || payment.asaasInstallmentId)}
                                     className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-[10px] font-bold hover:bg-indigo-100 inline-flex items-center gap-1"
                                     title="Imprimir Carnê Completo"
                                   >
