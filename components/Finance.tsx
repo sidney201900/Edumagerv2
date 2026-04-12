@@ -589,6 +589,25 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
       const rawGuardianCpf = (student.guardianCpf || '').replace(/\D/g, '');
       const finalCpf = (isMinor && rawGuardianCpf) ? rawGuardianCpf : rawCpf;
 
+      // EXTREMAMENTE IMPORTANTE: No Asaas Oficial, a data de nascimento deve pertencer ao dono do CPF enviado.
+      const finalBirthDate = (isMinor && student.guardianBirthDate) ? student.guardianBirthDate : student.birthDate;
+
+      // Validação de campos obrigatórios para o Asaas Oficial
+      if (!finalCpf || finalCpf.length < 11) {
+        showAlert('Erro de Cadastro', `O ${isMinor ? 'responsável' : 'aluno'} precisa ter um CPF válido cadastrado para gerar cobrança no Asaas Oficial.`, 'error');
+        return;
+      }
+
+      if (!student.addressZip || student.addressZip.length < 8) {
+        showAlert('Erro de Cadastro', 'O CEP do aluno é obrigatório e deve ser válido para o Asaas Oficial.', 'error');
+        return;
+      }
+
+      if (!student.addressStreet || !student.addressNumber) {
+        showAlert('Erro de Cadastro', 'Endereço e Número são obrigatórios no cadastro do aluno para gerar cobrança.', 'error');
+        return;
+      }
+
       const originalDesc = formData.description || 'Mensalidade';
       const finalDescription = isMinor ? `${originalDesc} - Aluno: ${student.name}` : originalDesc;
 
@@ -610,7 +629,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
           endereco: student.addressStreet,
           numero: student.addressNumber,
           bairro: student.addressNeighborhood,
-          nascimento: student.birthDate,
+          nascimento: finalBirthDate,
           descricao: finalDescription,
           parcelas: manualInstallments
         })
