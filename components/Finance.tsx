@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { SchoolData, Payment, Student } from '../types';
 import { useDialog } from '../DialogContext';
 import SearchableSelect from './SearchableSelect';
-import { CheckCircle, Clock, AlertCircle, RefreshCw, Filter, DollarSign, Plus, X, Download, FileSignature, Printer, Tag, Hash, User, BookOpen, Trash2, Pencil, Eye, Calendar, AlertTriangle, Barcode, Receipt, Layers, ChevronUp, ChevronDown } from 'lucide-react';
+import { CheckCircle, Clock, AlertCircle, RefreshCw, Filter, DollarSign, Plus, X, Download, FileSignature, Printer, Tag, Hash, User, BookOpen, Trash2, Pencil, Eye, Calendar, AlertTriangle, Barcode, Receipt, Layers, ChevronUp, ChevronDown, Database, Search } from 'lucide-react';
 import { pdfService } from '../services/pdfService';
 import { supabase, isSupabaseConfigured } from '../services/supabase';
 
@@ -29,6 +29,11 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showPrintCarneModal, setShowPrintCarneModal] = useState(false);
+  const [showSupabaseModal, setShowSupabaseModal] = useState(false);
+  const [supabaseRecords, setSupabaseRecords] = useState<any[]>([]);
+  const [isFetchingSupabase, setIsFetchingSupabase] = useState(false);
+  const [supabaseSearch, setSupabaseSearch] = useState('');
+  const [selectedSupabaseRows, setSelectedSupabaseRows] = useState<string[]>([]);
 
   // Selection states
   const [selectedStudentHistory, setSelectedStudentHistory] = useState<Student | null>(null);
@@ -249,6 +254,74 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
       setIsSyncing(false);
     }
   };
+
+  const fetchSupabaseRecords = async () => {
+    if (!isSupabaseConfigured()) return;
+    setIsFetchingSupabase(true);
+    setSelectedSupabaseRows([]); // Clear selection on refresh
+    try {
+      const { data: records, error } = await supabase
+        .from('alunos_cobrancas')
+        .select('*')
+        .order('vencimento', { ascending: false });
+
+      if (error) throw error;
+      setSupabaseRecords(records || []);
+    } catch (error) {
+      console.error('Error fetching Supabase records:', error);
+      showAlert('Erro', 'Falha ao buscar dados do Supabase.', 'error');
+    } finally {
+      setIsFetchingSupabase(false);
+    }
+  };
+
+  const deleteSupabaseRecord = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('alunos_cobrancas')
+        .delete()
+        .eq('asaas_payment_id', id);
+
+      if (error) throw error;
+      
+      setSupabaseRecords(prev => prev.filter(r => r.asaas_payment_id !== id));
+      showAlert('Sucesso', 'Registro removido do Supabase.', 'success');
+    } catch (error) {
+      console.error('Error deleting Supabase record:', error);
+      showAlert('Erro', 'Falha ao excluir do Supabase.', 'error');
+    }
+  };
+
+  const deleteSupabaseRecordsBulk = async () => {
+    if (selectedSupabaseRows.length === 0) return;
+    
+    if(!confirm(`Tem certeza que deseja excluir ${selectedSupabaseRows.length} registros diretamente do Supabase?`)) return;
+
+    setIsFetchingSupabase(true);
+    try {
+      const { error } = await supabase
+        .from('alunos_cobrancas')
+        .delete()
+        .in('asaas_payment_id', selectedSupabaseRows);
+
+      if (error) throw error;
+      
+      setSupabaseRecords(prev => prev.filter(r => !selectedSupabaseRows.includes(r.asaas_payment_id)));
+      setSelectedSupabaseRows([]);
+      showAlert('Sucesso', 'Registros removidos com sucesso.', 'success');
+    } catch (error) {
+      console.error('Error deleting records in bulk:', error);
+      showAlert('Erro', 'Falha ao excluir registros em massa.', 'error');
+    } finally {
+      setIsFetchingSupabase(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (showSupabaseModal) {
+      fetchSupabaseRecords();
+    }
+  }, [showSupabaseModal]);
 
   // General form state
   const [manualInstallments, setManualInstallments] = useState(1);
@@ -825,6 +898,13 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
               <Printer size={20} /> Imprimir Carnê
             </button>
           </div>
+
+          <button
+            onClick={() => setShowSupabaseModal(true)}
+            className="flex-1 sm:flex-none bg-slate-800 text-white px-6 py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-900 transition-all shadow-lg font-bold active:scale-95"
+          >
+            <Database size={20} /> DB Supabase
+          </button>
 
           <button
             onClick={() => setIsModalOpen(true)}
@@ -1574,6 +1654,175 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
                   Imprimir Carnê
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Supabase Manager Modal */}
+      {showSupabaseModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60] overflow-hidden animate-in fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-6xl h-[90vh] shadow-2xl flex flex-col relative overflow-hidden animate-slide-up">
+            <div className="bg-slate-800 h-1.5 w-full absolute top-0 left-0 z-10"></div>
+            
+            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div>
+                <h3 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+                  <Database className="text-slate-600" /> Gerenciador de Cobranças (Supabase)
+                </h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  Visualize e gerencie a tabela <code className="bg-slate-100 px-1.5 py-0.5 rounded text-indigo-600 font-bold">alunos_cobrancas</code>.
+                </p>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="relative w-64">
+                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                   <input 
+                    type="text" 
+                    placeholder="Filtrar por nome/ID..." 
+                    value={supabaseSearch}
+                    onChange={(e) => setSupabaseSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                   />
+                </div>
+                <button 
+                  onClick={fetchSupabaseRecords}
+                  disabled={isFetchingSupabase}
+                  className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                >
+                  <RefreshCw size={20} className={isFetchingSupabase ? 'animate-spin' : ''} />
+                </button>
+                <button onClick={() => setShowSupabaseModal(false)} className="p-2 bg-white text-slate-400 hover:text-red-500 rounded-lg shadow-sm transition-all hover:rotate-90">
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto p-4">
+              <div className="min-w-full overflow-hidden rounded-xl border border-slate-100 shadow-sm">
+                <table className="w-full text-left border-collapse bg-white">
+                  <thead className="sticky top-0 bg-slate-50 z-10 border-b border-slate-200">
+                    <tr className="text-[10px] uppercase font-black text-slate-400 tracking-wider">
+                      <th className="p-4 w-12 text-center">
+                        <input 
+                          type="checkbox"
+                          className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          checked={supabaseRecords.length > 0 && selectedSupabaseRows.length === supabaseRecords.length}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedSupabaseRows(supabaseRecords.map(r => r.asaas_payment_id));
+                            } else {
+                              setSelectedSupabaseRows([]);
+                            }
+                          }}
+                        />
+                      </th>
+                      <th className="p-4">ID Asaas</th>
+                      <th className="p-4">Aluno (ID)</th>
+                      <th className="p-4">Valor</th>
+                      <th className="p-4">Vencimento</th>
+                      <th className="p-4">Status</th>
+                      <th className="p-4">Link</th>
+                      <th className="p-4 text-right">Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {supabaseRecords
+                      .filter(r => {
+                        const searchLower = supabaseSearch.toLowerCase();
+                        return (r.asaas_payment_id || '').toLowerCase().includes(searchLower) ||
+                               (r.aluno_id || '').toLowerCase().includes(searchLower) ||
+                               (r.status || '').toLowerCase().includes(searchLower);
+                      })
+                      .map((record) => (
+                      <tr key={record.id} className={`hover:bg-slate-50/80 transition-colors text-xs ${selectedSupabaseRows.includes(record.asaas_payment_id) ? 'bg-indigo-50/50' : ''}`}>
+                        <td className="p-4 text-center">
+                          <input 
+                            type="checkbox"
+                            className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            checked={selectedSupabaseRows.includes(record.asaas_payment_id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedSupabaseRows(prev => [...prev, record.asaas_payment_id]);
+                              } else {
+                                setSelectedSupabaseRows(prev => prev.filter(id => id !== record.asaas_payment_id));
+                              }
+                            }}
+                          />
+                        </td>
+                        <td className="p-4 font-mono text-indigo-600 font-bold">{record.asaas_payment_id}</td>
+                        <td className="p-4">
+                          <div className="font-bold text-slate-700">
+                            {data.students.find(s => s.id === record.aluno_id)?.name || 'N/A'}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono">{record.aluno_id}</div>
+                        </td>
+                        <td className="p-4 font-black text-slate-900">R$ {Number(record.valor).toFixed(2)}</td>
+                        <td className="p-4 font-medium text-slate-600">{new Date(record.vencimento).toLocaleDateString('pt-BR')}</td>
+                        <td className="p-4">
+                          <span className={`px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                            record.status === 'PAGO' ? 'bg-emerald-100 text-emerald-700' :
+                            record.status === 'ATRASADO' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                          }`}>
+                            {record.status}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          {record.link_boleto ? (
+                            <a href={record.link_boleto} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1">
+                              <Barcode size={14} /> Link
+                            </a>
+                          ) : '-'}
+                        </td>
+                        <td className="p-4 text-right">
+                          <button 
+                            onClick={() => {
+                              if(confirm('Tem certeza que deseja excluir este registro diretamente do Supabase? Isso pode afetar a sincronização do Portal do Aluno.')) {
+                                deleteSupabaseRecord(record.asaas_payment_id);
+                              }
+                            }}
+                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {supabaseRecords.length === 0 && !isFetchingSupabase && (
+                      <tr>
+                        <td colSpan={7} className="p-12 text-center text-slate-400 italic">Nenhum registro encontrado na tabela alunos_cobrancas.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+              <div className="flex items-center gap-6">
+                <div className="text-xs text-slate-500 font-medium">
+                  Total de registros carregados: <span className="font-bold text-slate-800">{supabaseRecords.length}</span>
+                </div>
+                {selectedSupabaseRows.length > 0 && (
+                  <div className="flex items-center gap-3 animate-in slide-in-from-left">
+                    <span className="text-xs font-black text-red-600 bg-red-50 px-3 py-1 rounded-full border border-red-100 uppercase tracking-tighter">
+                      {selectedSupabaseRows.length} selecionados
+                    </span>
+                    <button 
+                      onClick={deleteSupabaseRecordsBulk}
+                      className="flex items-center gap-2 bg-red-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-red-700 transition-all shadow-md active:scale-95"
+                    >
+                      <Trash2 size={14} /> Excluir Selecionados
+                    </button>
+                  </div>
+                )}
+              </div>
+              <button 
+                onClick={() => setShowSupabaseModal(false)}
+                className="px-8 py-3 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-100 transition-all shadow-sm"
+              >
+                Fechar Gerenciador
+              </button>
             </div>
           </div>
         </div>
