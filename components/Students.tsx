@@ -1496,7 +1496,7 @@ const Students: React.FC<StudentsProps> = ({ data, updateData, deepLinkStudentId
                   <section className="space-y-4">
                     <h4 className="text-xs font-black text-indigo-600 uppercase tracking-widest border-b border-indigo-100 pb-2">Endereço Residencial</h4>
                     
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-4 gap-4">
                       <div className="col-span-1">
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">CEP</label>
                         <input 
@@ -1515,6 +1515,15 @@ const Students: React.FC<StudentsProps> = ({ data, updateData, deepLinkStudentId
                           value={formData.addressStreet || ''} 
                           onChange={e => setFormData({...formData, addressStreet: e.target.value})} 
                           placeholder="Rua, Avenida..."
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nº</label>
+                        <input 
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all font-medium text-sm"
+                          value={formData.addressNumber || ''} 
+                          onChange={e => setFormData({...formData, addressNumber: e.target.value})} 
+                          placeholder="123"
                         />
                       </div>
                     </div>
@@ -1673,15 +1682,28 @@ const Students: React.FC<StudentsProps> = ({ data, updateData, deepLinkStudentId
                         </select>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <input 
-                          type="checkbox" 
-                          id="generateContract"
-                          className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                          checked={(formData as any).generateContract || false}
-                          onChange={e => setFormData({...formData, generateContract: e.target.checked} as any)}
-                        />
-                        <label htmlFor="generateContract" className="text-sm font-medium text-slate-600">Gerar Contrato Automático</label>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="checkbox" 
+                            id="generateFee"
+                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                            checked={(formData as any).generateFee || false}
+                            onChange={e => setFormData({...formData, generateFee: e.target.checked} as any)}
+                          />
+                          <label htmlFor="generateFee" className="text-sm font-medium text-slate-600">Gerar Taxa de Matrícula</label>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="checkbox" 
+                            id="generateContract"
+                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                            checked={(formData as any).generateContract || false}
+                            onChange={e => setFormData({...formData, generateContract: e.target.checked} as any)}
+                          />
+                          <label htmlFor="generateContract" className="text-sm font-medium text-slate-600">Gerar Contrato Automático</label>
+                        </div>
                       </div>
                     </div>
                   </section>
