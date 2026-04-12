@@ -12,6 +12,9 @@ import autoTable from 'jspdf-autotable';
 interface StudentsProps {
   data: SchoolData;
   updateData: (newData: Partial<SchoolData>) => void;
+  deepLinkStudentId?: string | null;
+  deepLinkClassId?: string | null;
+  clearDeepLink?: () => void;
 }
 
 const Students: React.FC<StudentsProps> = ({ data, updateData }) => {
@@ -74,6 +77,24 @@ const Students: React.FC<StudentsProps> = ({ data, updateData }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Process Deep Links (from Classes or Notifications)
+  useEffect(() => {
+    if (deepLinkClassId) {
+      setSelectedClassId(deepLinkClassId);
+      if (clearDeepLink) clearDeepLink();
+    }
+    if (deepLinkStudentId) {
+      const student = data.students.find(s => s.id === deepLinkStudentId);
+      if (student) {
+        setSearchTerm(student.name);
+        if (student.status === 'cancelled') setActiveTab('cancelled');
+        else setActiveTab('active');
+        if (student.classId) setSelectedClassId(student.classId);
+      }
+      if (clearDeepLink) clearDeepLink();
+    }
+  }, [deepLinkStudentId, deepLinkClassId, data.students]);
 
   // Load Models
   useEffect(() => {
@@ -831,7 +852,7 @@ const Students: React.FC<StudentsProps> = ({ data, updateData }) => {
     }
 
     const updatedStudents = data.students.map(s => 
-      s.id === showDeleteModal.id ? { ...s, status: 'cancelled' as const, cancellationReason } : s
+      s.id === showDeleteModal.id ? { ...s, status: 'cancelled' as const, cancellationReason, classId: '' } : s
     );
     
     updateData({ students: updatedStudents });
@@ -875,6 +896,32 @@ const Students: React.FC<StudentsProps> = ({ data, updateData }) => {
           console.error('Erro ao rematricular:', error);
           showAlert('Erro', 'Ocorreu um erro ao rematricular o aluno.', 'error');
         }
+      }
+    );
+  };
+
+  const handleDeletePermanently = (student: Student) => {
+    showConfirm(
+      'Excluir Aluno Definitivamente',
+      `⚠️ Atenção: Esta ação irá remover permanentemente ${student.name} e todo o seu histórico (mensalidades, contratos e presenças). Esta ação NÃO pode ser desfeita. Deseja continuar?`,
+      async () => {
+        const updatedStudents = data.students.filter(s => s.id !== student.id);
+        const updatedPayments = data.payments.filter(p => p.studentId !== student.id);
+        const updatedContracts = data.contracts.filter(c => c.studentId !== student.id);
+        const updatedAttendance = data.attendance?.filter(a => a.studentId !== student.id) || [];
+        const updatedNotifications = data.notifications?.filter(n => n.studentId !== student.id) || [];
+        
+        const newData = {
+          students: updatedStudents,
+          payments: updatedPayments,
+          contracts: updatedContracts,
+          attendance: updatedAttendance,
+          notifications: updatedNotifications
+        };
+        
+        updateData(newData);
+        dbService.saveData({ ...data, ...newData });
+        showAlert('Sucesso', 'O aluno e todo o seu histórico foram removidos permanentemente.', 'success');
       }
     );
   };
@@ -929,14 +976,16 @@ const Students: React.FC<StudentsProps> = ({ data, updateData }) => {
     setShowModal(true);
   };
 
-  const filteredStudents = data.students.filter(s => {
-    const matchesSearch = (s.name || '').toLowerCase().includes((searchTerm || '').toLowerCase()) ||
-                         (s.cpf || '').includes(searchTerm) ||
-                         (s.email || '').toLowerCase().includes((searchTerm || '').toLowerCase());
-    const matchesTab = activeTab === 'active' ? s.status !== 'cancelled' : s.status === 'cancelled';
-    const matchesClass = selectedClassId ? (selectedClassId === 'none' ? !s.classId : s.classId === selectedClassId) : true;
-    return matchesSearch && matchesTab && matchesClass;
-  });
+  const filteredStudents = data.students
+    .filter(s => {
+      const matchesSearch = (s.name || '').toLowerCase().includes((searchTerm || '').toLowerCase()) ||
+                           (s.cpf || '').includes(searchTerm) ||
+                           (s.email || '').toLowerCase().includes((searchTerm || '').toLowerCase());
+      const matchesTab = activeTab === 'active' ? s.status !== 'cancelled' : s.status === 'cancelled';
+      const matchesClass = selectedClassId ? (selectedClassId === 'none' ? !s.classId : s.classId === selectedClassId) : true;
+      return matchesSearch && matchesTab && matchesClass;
+    })
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
   const generatePDF = async () => {
     setIsGeneratingPDF(true);
@@ -1016,7 +1065,7 @@ const Students: React.FC<StudentsProps> = ({ data, updateData }) => {
           />
         </div>
 
-        {!selectedClassId && !searchTerm ? (
+        {(activeTab === 'active' && !selectedClassId && !searchTerm) ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {data.classes.map(cls => {
               const studentCount = data.students.filter(s => s.classId === cls.id && (activeTab === 'active' ? s.status !== 'cancelled' : s.status === 'cancelled')).length;
@@ -1144,7 +1193,7 @@ const Students: React.FC<StudentsProps> = ({ data, updateData }) => {
                           )}
                         </td>
                         <td className="p-4 text-right">
-                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex justify-end gap-1 sm:gap-2">
                             {student.status !== 'cancelled' && (
                               <button onClick={() => setTransferringStudent(student)} className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors" title="Transferir Turma">
                                 <ArrowRightLeft size={18} />
@@ -1157,9 +1206,21 @@ const Students: React.FC<StudentsProps> = ({ data, updateData }) => {
                               <Eye size={18} />
                             </button>
                             {student.status === 'cancelled' && (
-                              <button onClick={() => handleRematricular(student)} className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Rematricular">
-                                <RefreshCw size={18} />
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => pdfService.generateCancellationTermPDF(student, data, student.cancellationReason || 'Não informado')}
+                                  className="p-2 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                                  title="Imprimir Termo de Cancelamento"
+                                >
+                                  <Printer size={18} />
+                                </button>
+                                <button onClick={() => handleRematricular(student)} className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Rematricular">
+                                  <RefreshCw size={18} />
+                                </button>
+                                <button onClick={() => handleDeletePermanently(student)} className="p-2 text-slate-400 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors" title="Excluir Definitivamente">
+                                  <Trash2 size={18} />
+                                </button>
+                              </>
                             )}
                             {student.status !== 'cancelled' && (
                               <>

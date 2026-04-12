@@ -9,6 +9,7 @@ import { dbService } from '../services/dbService';
 interface ClassesProps {
   data: SchoolData;
   updateData: (newData: Partial<SchoolData>) => void;
+  onNavigateToClass: (classId: string, studentId?: string) => void;
 }
 
 const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
@@ -18,6 +19,7 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
   const [editingClass, setEditingClass] = useState<Class | null>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState<string | null>(null);
   const [scheduleClass, setScheduleClass] = useState<Class | null>(null); // For LessonSchedule component
+  const [viewingStudentsClass, setViewingStudentsClass] = useState<Class | null>(null); // For student list modal
   
   const [formData, setFormData] = useState<Omit<Class, 'id'>>({
     name: '',
@@ -175,6 +177,10 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
     }
   };
 
+    setQuickTimeClass(null);
+    showAlert('Sucesso', 'Horário alterado para a turma e todas as aulas futuras atualizadas!', 'success');
+  };
+
   const handleQuickTimeSave = () => {
     if (!quickTimeClass || !quickStartTime || !quickEndTime) {
       showAlert('Atenção', 'Preencha início e término.', 'warning');
@@ -204,6 +210,18 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
 
     setQuickTimeClass(null);
     showAlert('Sucesso', 'Horário alterado para a turma e todas as aulas futuras atualizadas!', 'success');
+  };
+
+  const calculateAge = (birthDate: string) => {
+    if (!birthDate) return null;
+    const today = new Date();
+    const birth = new Date(birthDate);
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    return age;
   };
 
   const inputClass = "w-full px-4 py-3 bg-white text-black border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm";
@@ -347,12 +365,20 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
                 </div>
               </div>
 
-              <button
-                 onClick={() => setScheduleClass(cls)}
-                 className="w-full mt-5 bg-indigo-50 border border-indigo-100 text-indigo-700 hover:bg-indigo-600 hover:text-white py-3.5 rounded-xl font-black flex items-center justify-center gap-2 transition-all shadow-sm group-hover:shadow-md"
-              >
-                <Calendar size={22} className="group-hover:scale-110 transition-transform" /> Abrir Cronograma
-              </button>
+              <div className="grid grid-cols-2 gap-3 mt-5">
+                <button
+                  onClick={() => setViewingStudentsClass(cls)}
+                  className="bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+                >
+                  <User size={18} /> Ver Alunos
+                </button>
+                <button
+                   onClick={() => setScheduleClass(cls)}
+                   className="bg-indigo-50 border border-indigo-100 text-indigo-700 hover:bg-indigo-600 hover:text-white py-3 rounded-xl font-black flex items-center justify-center gap-2 transition-all shadow-sm group-hover:shadow-md"
+                >
+                  <Calendar size={18} /> Cronograma
+                </button>
+              </div>
             </div>
           );
         })}
@@ -481,6 +507,91 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
           updateData={updateData} 
           onClose={() => setScheduleClass(null)} 
         />
+      )}
+
+      {/* Viewing Students Modal */}
+      {viewingStudentsClass && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl my-auto relative overflow-hidden animate-slide-up">
+            <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
+            
+            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-indigo-50/30">
+              <div>
+                <h3 className="text-2xl font-black text-slate-800 tracking-tight">Alunos da Turma</h3>
+                <p className="text-sm text-slate-500 mt-1">{viewingStudentsClass.name} • {data.students.filter(s => s.classId === viewingStudentsClass.id).length} alunos matriculados</p>
+              </div>
+              <button 
+                onClick={() => setViewingStudentsClass(null)} 
+                className="p-2 bg-white text-slate-400 hover:text-red-500 rounded-lg shadow-sm transition-all hover:rotate-90"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="p-4 max-h-[60vh] overflow-y-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100 text-[10px] uppercase text-slate-400 font-black tracking-widest">
+                    <th className="p-4">Aluno</th>
+                    <th className="p-4">Idade</th>
+                    <th className="p-4 text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {data.students
+                    .filter(s => s.classId === viewingStudentsClass.id)
+                    .sort((a,b) => (a.name || '').localeCompare(b.name || ''))
+                    .map(student => (
+                      <tr key={student.id} className="hover:bg-slate-50 transition-colors group">
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-slate-100 overflow-hidden border border-slate-200">
+                              {student.photo ? (
+                                <img src={student.photo} alt={student.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                  <User size={20} />
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-bold text-slate-800 text-sm">{student.name}</p>
+                              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{student.enrollmentNumber || 'Sem matrícula'}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4 text-sm font-bold text-slate-600">
+                          {calculateAge(student.birthDate) !== null ? `${calculateAge(student.birthDate)} anos` : '-'}
+                        </td>
+                        <td className="p-4 text-right">
+                          <button 
+                            onClick={() => onNavigateToClass(viewingStudentsClass.id, student.id)}
+                            className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                          >
+                            Ver Perfil
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  {data.students.filter(s => s.classId === viewingStudentsClass.id).length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="p-10 text-center text-slate-400 italic text-sm">Nenhum aluno matriculado nesta turma.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            
+            <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button 
+                onClick={() => setViewingStudentsClass(null)} 
+                className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-colors shadow-sm"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

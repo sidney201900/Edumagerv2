@@ -29,6 +29,7 @@ const App = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<View>(View.Dashboard);
   const [deepLinkStudentId, setDeepLinkStudentId] = useState<string | null>(null);
+  const [deepLinkClassId, setDeepLinkClassId] = useState<string | null>(null);
   // Initial load from LocalStorage for speed (fallback), then IDB
   const [data, setData] = useState<SchoolData>(dbService.getData());
   
@@ -172,6 +173,12 @@ const App = () => {
     setCurrentView(View.AttendanceQuery);
   };
 
+  const handleNavigateToClass = (classId: string, studentId?: string) => {
+    setDeepLinkClassId(classId);
+    setDeepLinkStudentId(studentId || null);
+    setCurrentView(View.Students);
+  };
+
   const renderView = () => {
     switch (currentView) {
       case View.Dashboard:
@@ -179,9 +186,9 @@ const App = () => {
       case View.Courses:
         return <Courses data={data} updateData={updateData} />;
       case View.Students:
-        return <Students data={data} updateData={updateData} />;
+        return <Students data={data} updateData={updateData} deepLinkStudentId={deepLinkStudentId} deepLinkClassId={deepLinkClassId} clearDeepLink={() => { setDeepLinkStudentId(null); setDeepLinkClassId(null); }} />;
       case View.Classes:
-        return <Classes data={data} updateData={updateData} />;
+        return <Classes data={data} updateData={updateData} onNavigateToClass={handleNavigateToClass} />;
       case View.Finance:
         return <Finance data={data} updateData={updateData} />;
       case View.Contracts:
