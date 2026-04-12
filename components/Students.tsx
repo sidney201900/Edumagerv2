@@ -17,7 +17,7 @@ interface StudentsProps {
   clearDeepLink?: () => void;
 }
 
-const Students: React.FC<StudentsProps> = ({ data, updateData }) => {
+const Students: React.FC<StudentsProps> = ({ data, updateData, deepLinkStudentId, deepLinkClassId, clearDeepLink }) => {
   const { showAlert, showConfirm } = useDialog();
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);

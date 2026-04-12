@@ -12,7 +12,7 @@ interface ClassesProps {
   onNavigateToClass: (classId: string, studentId?: string) => void;
 }
 
-const Classes: React.FC<ClassesProps> = ({ data, updateData }) => {
+const Classes: React.FC<ClassesProps> = ({ data, updateData, onNavigateToClass }) => {
   const { showAlert, showConfirm } = useDialog();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
