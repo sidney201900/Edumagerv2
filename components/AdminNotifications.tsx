@@ -63,7 +63,11 @@ const AdminNotifications: React.FC<Props> = ({ data, updateData, setView, onNavi
     if (!notif.read) handleMarkAsRead(notif.id);
     
     if (notif.title.toLowerCase().includes('justificativa') || notif.message.toLowerCase().includes('justificativa')) {
-      setView(View.AttendanceQuery);
+      if (onNavigateToStudent) {
+        onNavigateToStudent(notif.studentId);
+      } else {
+        setView(View.AttendanceQuery);
+      }
       setIsOpen(false);
     }
   };

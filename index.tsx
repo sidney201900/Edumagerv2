@@ -116,8 +116,14 @@ const App = () => {
     }
   }, [data.logo]);
   // 4. Efeito para Realtime (Escuta mudanças do Portal em tempo real)
+  const dataRef = useRef(data);
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
+
   useEffect(() => {
     if (isCloudEnabled) {
+      console.log("📡 Iniciando escuta em tempo real para school_data...");
       // Cria um canal de escuta para a tabela school_data
       const channel = supabase
         .channel('school_data_changes')
@@ -129,20 +135,23 @@ const App = () => {
             const newData = payload.new.data as SchoolData;
             
             // Só atualiza se for uma mudança externa (evita loops)
-            if (newData.lastUpdated !== data.lastUpdated) {
-              console.log("🔔 Nova notificação recebida em tempo real!");
+            if (newData.lastUpdated !== dataRef.current.lastUpdated) {
+              console.log("🔔 Nova mudança externa detectada em tempo real!");
               setData(newData);
               dbService.saveData(newData); // Sincroniza cache local
             }
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          console.log("🔌 Status da conexão Realtime:", status);
+        });
 
       return () => {
+        console.log("⚰️ Encerrando canal de Realtime");
         supabase.removeChannel(channel);
       };
     }
-  }, [isCloudEnabled, data.lastUpdated]);
+  }, [isCloudEnabled]);
 
   const updateData = (newData: Partial<SchoolData>) => {
     setData(prev => ({ 
