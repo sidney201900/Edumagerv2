@@ -257,7 +257,7 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
           const fetchOptions = {
             headers: { 'Accept': 'application/pdf' }
           };
-          if (pdfUrl.includes('asaas.com/api')) {
+          if (pdfUrl.includes('asaas.com')) {
             fetchOptions.headers['access_token'] = process.env.ASAAS_API_KEY;
           }
 

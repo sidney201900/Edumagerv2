@@ -1008,6 +1008,27 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
               </select>
             </div>
           </div>
+          
+          {selectedPayments.length > 0 && (
+            <div className="flex items-center justify-between bg-red-50 border border-red-100 p-3 rounded-lg animate-in slide-in-from-top-2">
+              <div className="flex items-center gap-2 text-red-700 text-xs font-bold uppercase tracking-wider">
+                <AlertCircle size={14} />
+                {selectedPayments.length} lançamento(s) selecionado(s)
+              </div>
+              <button 
+                onClick={() => {
+                  if (confirm(`Deseja excluir permanentemente os ${selectedPayments.length} lançamentos selecionados no Asaas e no sistema?`)) {
+                    handleBulkDelete(selectedPayments);
+                  }
+                }}
+                disabled={isDeleting}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-red-700 transition-all flex items-center gap-2 shadow-lg active:scale-95 disabled:opacity-50"
+              >
+                {isDeleting ? <RefreshCw size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                Excluir Selecionados
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="overflow-x-auto">
