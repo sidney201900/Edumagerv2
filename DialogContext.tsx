@@ -87,7 +87,7 @@ export const DialogProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     <DialogContext.Provider value={{ showAlert, showConfirm }}>
       {children}
       {isOpen && options && (
-        <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100] transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
+        <div className={`fixed inset-0 bg-transparent flex items-center justify-center p-4 z-[100] transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
           <div className={`bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl transition-all duration-400 ${isClosing ? 'animate-slide-down-fade-out' : 'animate-slide-up'}`}>
             <div className="h-2 bg-indigo-600 w-full"></div>
             <div className="p-6 text-center">
