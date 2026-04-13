@@ -643,6 +643,11 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
 
             <div className="p-6 space-y-4">
               <div>
+                <SearchableSelect
+                  label="Aluno"
+                  placeholder="Selecione ou digite o nome do aluno..."
+                  value={absenceStudentId}
+                  onChange={(val) => setAbsenceStudentId(val)}
                   options={data.students
                     .filter(s => s.status === 'active')
                     .sort((a, b) => a.name.localeCompare(b.name))
