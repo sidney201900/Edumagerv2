@@ -513,6 +513,7 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
+                          {studentRecords.map(record => {
                             const recordDate = new Date(record.date);
                             const time = recordDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                             
