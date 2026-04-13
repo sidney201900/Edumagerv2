@@ -42,11 +42,42 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   
-  // Absence Form State
   const [absenceStudentId, setAbsenceStudentId] = useState('');
   const [absenceJustification, setAbsenceJustification] = useState('');
+  const [absenceDate, setAbsenceDate] = useState(new Date().toISOString().split('T')[0]);
+  const [absenceLessonId, setAbsenceLessonId] = useState('');
   const [viewingAttachment, setViewingAttachment] = useState<string | null>(null);
   const [attendanceForAttachment, setAttendanceForAttachment] = useState<Attendance | null>(null);
+
+  const toggleAttendanceStatus = (record: any) => {
+    let updatedAttendance = [...(data.attendance || [])];
+    
+    if (record.isVirtual) {
+      // Create a new record based on virtual info
+      const lesson = data.lessons.find(l => l.id === record.id.replace('v-', ''));
+      const newType = record.type === 'presence' ? 'absence' : 'presence';
+      
+      const newRecord: Attendance = {
+        id: crypto.randomUUID(),
+        studentId: record.studentId,
+        classId: record.classId,
+        date: lesson ? `${lesson.date}T${lesson.startTime || '00:00'}:00` : new Date().toISOString(),
+        verified: true,
+        type: newType
+      };
+      updatedAttendance.push(newRecord);
+    } else {
+      // Toggle existing record
+      const newType = record.type === 'absence' ? 'presence' : 'absence';
+      updatedAttendance = updatedAttendance.map(a => 
+        a.id === record.id ? { ...a, type: newType, justification: undefined, justificationAccepted: undefined } : a
+      );
+    }
+
+    updateData({ attendance: updatedAttendance });
+    dbService.saveData({ ...data, attendance: updatedAttendance });
+    showAlert('Sucesso', 'Status de frequência atualizado com sucesso.', 'success');
+  };
 
   const handleDeleteAttachmentRecord = () => {
     if (!attendanceForAttachment || !attendanceForAttachment.justification) return;
@@ -78,6 +109,7 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
       setIsClosing(false);
       setAbsenceStudentId('');
       setAbsenceJustification('');
+      setAbsenceLessonId('');
     }, 400);
   };
 
@@ -90,31 +122,47 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
     }, 400);
   };
 
-  const handleAddAbsence = () => {
-    if (!absenceStudentId || !absenceJustification) {
-      showAlert('Atenção', "⚠️ Por favor, selecione um aluno e informe a justificativa.", 'warning');
+    const lesson = data.lessons.find(l => l.id === absenceLessonId);
+    if (!lesson) {
+      showAlert('Atenção', "⚠️ Por favor, selecione a aula para justificar.", 'warning');
       return;
     }
 
-    const student = data.students.find(s => s.id === absenceStudentId);
-    if (!student) return;
+    // Check if there is already a record for this lesson
+    const existingIndex = (data.attendance || []).findIndex(a => 
+      a.studentId === absenceStudentId && a.date.startsWith(lesson.date)
+    );
 
-    const newAbsence: Attendance = {
-      id: crypto.randomUUID(),
-      studentId: absenceStudentId,
-      classId: student.classId,
-      date: new Date().toISOString(),
-      verified: true,
-      type: 'absence',
-      justification: absenceJustification
-    };
+    let updatedAttendance = [...(data.attendance || [])];
 
-    const updatedAttendance = [...(data.attendance || []), newAbsence];
+    if (existingIndex >= 0) {
+      updatedAttendance[existingIndex] = {
+        ...updatedAttendance[existingIndex],
+        type: 'absence',
+        justification: absenceJustification,
+        justificationAccepted: true,
+        verified: true
+      };
+    } else {
+      const newAbsence: Attendance = {
+        id: crypto.randomUUID(),
+        studentId: absenceStudentId,
+        classId: student.classId,
+        date: `${lesson.date}T${lesson.startTime || '00:00'}:00`,
+        verified: true,
+        type: 'absence',
+        justification: absenceJustification,
+        justificationAccepted: true
+      };
+      updatedAttendance.push(newAbsence);
+    }
+
     updateData({ attendance: updatedAttendance });
     dbService.saveData({ ...data, attendance: updatedAttendance });
 
     setAbsenceStudentId('');
     setAbsenceJustification('');
+    setAbsenceLessonId('');
     closeModal();
     showAlert('Sucesso', "Falta justificada registrada com sucesso!", 'success');
   };
@@ -521,19 +569,44 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                                   )}
                                 </td>
                                 <td className="px-6 py-4 text-right">
-                                  {hasPendingJustification && (
+                                  <div className="flex justify-end gap-2">
+                                    {(isAbsence || isPendente || isAwaiting) && (
+                                      <button 
+                                        onClick={() => {
+                                          setAbsenceStudentId(selectedStudent.id);
+                                          setAbsenceDate(record.date.split('T')[0]);
+                                          const lessonId = record.isVirtual ? record.id.replace('v-', '') : 
+                                            data.lessons.find(l => l.date === record.date.split('T')[0] && l.classId === record.classId)?.id;
+                                          setAbsenceLessonId(lessonId || '');
+                                          setShowAbsenceModal(true);
+                                        }}
+                                        className="text-[10px] px-2 py-1.5 bg-amber-500 text-white font-bold rounded hover:bg-amber-600 transition-colors"
+                                      >
+                                        Justificar
+                                      </button>
+                                    )}
+
+                                    {hasPendingJustification && (
+                                      <button 
+                                        onClick={() => {
+                                          const updated = (data.attendance || []).map(a => a.id === record.id ? { ...a, justificationAccepted: true } : a);
+                                          updateData({ attendance: updated });
+                                          dbService.saveData({ ...data, attendance: updated });
+                                          showAlert('Sucesso', 'Justificativa aceita com sucesso.', 'success');
+                                        }}
+                                        className="text-[10px] px-2 py-1.5 bg-indigo-600 text-white font-bold rounded hover:bg-indigo-700 transition-colors"
+                                      >
+                                        Aceitar
+                                      </button>
+                                    )}
+
                                     <button 
-                                      onClick={() => {
-                                        const updated = (data.attendance || []).map(a => a.id === record.id ? { ...a, justificationAccepted: true } : a);
-                                        updateData({ attendance: updated });
-                                        dbService.saveData({ ...data, attendance: updated });
-                                        showAlert('Sucesso', 'Justificativa aceita com sucesso.', 'success');
-                                      }}
-                                      className="text-[10px] px-2 py-1.5 bg-indigo-600 text-white font-bold rounded hover:bg-indigo-700 transition-colors"
+                                      onClick={() => toggleAttendanceStatus(record)}
+                                      className={`text-[10px] px-2 py-1.5 ${isAbsence || isPendente || isAwaiting ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'} text-white font-bold rounded transition-colors whitespace-nowrap`}
                                     >
-                                      Aceitar
+                                      {isAbsence || isPendente || isAwaiting ? 'Marcar Presença' : 'Marcar Falta'}
                                     </button>
-                                  )}
+                                  </div>
                                 </td>
                               </tr>
                             );
@@ -570,16 +643,56 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
 
             <div className="p-6 space-y-4">
               <div>
-                <SearchableSelect
-                  label="Aluno"
-                  placeholder="Selecione ou digite o nome do aluno..."
-                  value={absenceStudentId}
-                  onChange={(val) => setAbsenceStudentId(val)}
                   options={data.students
                     .filter(s => s.status === 'active')
                     .sort((a, b) => a.name.localeCompare(b.name))
                     .map(student => ({ id: student.id, name: student.name }))}
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Data</label>
+                  <input 
+                    type="date"
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700"
+                    value={absenceDate}
+                    onChange={e => {
+                      setAbsenceDate(e.target.value);
+                      setAbsenceLessonId('');
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Aula/Horário</label>
+                  <select
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700"
+                    value={absenceLessonId}
+                    onChange={e => setAbsenceLessonId(e.target.value)}
+                  >
+                    <option value="">Selecione...</option>
+                    {data.lessons
+                      .filter(l => l.date === absenceDate && l.status !== 'cancelled')
+                      .filter(l => {
+                        // If student selected, filter lessons matching student's class or any class student is in
+                        if (!absenceStudentId) return true;
+                        const student = data.students.find(s => s.id === absenceStudentId);
+                        return student && l.classId === student.classId;
+                      })
+                      .map(lesson => {
+                        const classObj = data.classes.find(c => c.id === lesson.classId);
+                        const hasPresence = (data.attendance || []).some(a => 
+                          a.studentId === absenceStudentId && a.date.startsWith(lesson.date) && a.type === 'presence'
+                        );
+                        return (
+                          <option key={lesson.id} value={lesson.id} disabled={hasPresence}>
+                            {lesson.startTime || '--:--'} - {classObj?.name} {hasPresence ? '(Presente)' : ''}
+                          </option>
+                        );
+                      })
+                    }
+                  </select>
+                </div>
               </div>
 
               <div>
