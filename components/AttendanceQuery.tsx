@@ -425,10 +425,17 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                 const virtualRecords: any[] = [];
                 
                 classLessons.forEach(lesson => {
-                  // Check if there's any record (presence or absence) for this date
-                  const hasRecord = actualRecords.some(a => a.date.startsWith(lesson.date));
+                  const matchingRecord = actualRecords.find(a => {
+                    if (!a.date.startsWith(lesson.date)) return false;
+                    if (!lesson.startTime) return true; 
+                    const recordTime = a.date.split('T')[1]?.substring(0, 5);
+                    if (!recordTime) return true;
+                    const [lH, lM] = lesson.startTime.split(':').map(Number);
+                    const [rH, rM] = recordTime.split(':').map(Number);
+                    return Math.abs((lH * 60 + lM) - (rH * 60 + rM)) < 90;
+                  });
                   
-                  if (!hasRecord) {
+                  if (!matchingRecord) {
                     const [endHours, endMinutes] = (lesson.endTime || '23:59').split(':');
                     const lessonEnd = new Date(lesson.date + 'T' + (lesson.endTime || '23:59') + ':00');
                     
@@ -444,12 +451,15 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                         id: `v-${lesson.id}`,
                         studentId: selectedStudent.id,
                         classId: selectedClass.id,
-                        date: lesson.date,
+                        date: `${lesson.date}T${lesson.startTime || '00:00'}:00`,
                         type: isFinished ? 'absence' : 'awaiting',
                         isVirtual: true,
+                        lessonId: lesson.id,
                         awaiting: isRecent // Show note if finished < 24h OR if not finished yet
                       });
                     }
+                  } else {
+                    (matchingRecord as any).lessonId = lesson.id;
                   }
                 });
 
@@ -503,14 +513,14 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
-                          {studentRecords.map(record => {
                             const recordDate = new Date(record.date);
                             const time = recordDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                             
-                            // Find corresponding lesson times
+                            // Find corresponding lesson times with high precision
                             const lesson = data.lessons.find(l => 
                               (record.isVirtual && record.id === `v-${l.id}`) || 
-                              (l.date === record.date.split('T')[0] && l.classId === record.classId)
+                              (record.lessonId === l.id) ||
+                              (!record.lessonId && l.date === record.date.split('T')[0] && l.classId === record.classId)
                             );
 
                             let justMotivo = record.justification || '';
