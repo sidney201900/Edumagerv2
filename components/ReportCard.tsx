@@ -396,7 +396,7 @@ const ReportCard: React.FC<ReportCardProps> = ({ data, updateData }) => {
 
       {/* GRADES MODAL */}
       {selectedStudent && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
+        <div className="fixed inset-0 bg-transparent z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] animate-slide-up">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-indigo-50/30">
               <div className="flex items-center gap-4">

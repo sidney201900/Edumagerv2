@@ -1246,7 +1246,7 @@ const Students: React.FC<StudentsProps> = ({ data, updateData, deepLinkStudentId
 
       {/* Enrollment Modal */}
       {showModal && (
-        <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
+        <div className={`fixed inset-0 bg-transparent z-50 flex items-center justify-center p-4 overflow-y-auto transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
           <div className={`bg-white rounded-2xl w-full max-w-5xl h-[90vh] flex flex-col shadow-2xl my-auto transition-all duration-400 relative overflow-hidden ${isClosing ? 'animate-slide-down-fade-out' : 'animate-slide-up'}`}>
             {/* Blue Top Bar */}
             <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
@@ -1740,7 +1740,7 @@ const Students: React.FC<StudentsProps> = ({ data, updateData, deepLinkStudentId
       )}
       {/* Transfer Student Modal */}
       {transferringStudent && (
-        <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
+        <div className={`fixed inset-0 bg-transparent z-50 flex items-center justify-center p-4 overflow-y-auto transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
           <div className={`bg-white rounded-2xl w-full max-w-md shadow-2xl my-auto transition-all duration-400 relative overflow-hidden ${isClosing ? 'animate-slide-down-fade-out' : 'animate-slide-up'}`}>
             {/* Blue Top Bar */}
             <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
@@ -1809,7 +1809,7 @@ const Students: React.FC<StudentsProps> = ({ data, updateData, deepLinkStudentId
               </div>
             </div>
           )}
-          <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
+          <div className={`fixed inset-0 bg-transparent z-50 flex items-center justify-center p-4 overflow-y-auto transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
           <div className={`bg-white rounded-2xl w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl my-auto transition-all duration-400 relative overflow-hidden ${isClosing ? 'animate-slide-down-fade-out' : 'animate-slide-up'}`}>
             {/* Blue Top Bar */}
             <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
@@ -2008,7 +2008,7 @@ const Students: React.FC<StudentsProps> = ({ data, updateData, deepLinkStudentId
     )}
       {/* Batch Delete Confirmation Modal */}
       {showDeleteBatchModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+        <div className="fixed inset-0 bg-transparent z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-slide-up">
             <div className="bg-red-600 h-1.5 w-full"></div>
             <div className="p-8 text-center">
@@ -2042,7 +2042,7 @@ const Students: React.FC<StudentsProps> = ({ data, updateData, deepLinkStudentId
 
       {/* Cancellation Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+        <div className="fixed inset-0 bg-transparent z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-slide-up">
             <div className="bg-orange-500 h-1.5 w-full"></div>
             <div className="p-8">
@@ -2105,7 +2105,7 @@ const Students: React.FC<StudentsProps> = ({ data, updateData, deepLinkStudentId
 
       {/* FALLBACK CARNE MODAL */}
       {showFallbackModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in">
+        <div className="fixed inset-0 bg-transparent flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in">
           <div className="bg-white rounded-xl w-full max-w-3xl shadow-2xl my-auto relative overflow-hidden animate-slide-up">
             <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
             

@@ -389,7 +389,7 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData, onNavigateToClass }
       </div>
 
       {isModalOpen && (
-        <div className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
+        <div className={`fixed inset-0 bg-transparent flex items-center justify-center p-4 z-50 overflow-y-auto transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
           <div className={`bg-white rounded-xl w-full max-w-2xl shadow-2xl my-auto transition-all duration-400 relative overflow-hidden ${isClosing ? 'animate-slide-down-fade-out' : 'animate-slide-up'}`}>
             {/* Blue Top Bar */}
             <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
@@ -508,7 +508,7 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData, onNavigateToClass }
 
       {/* Viewing Students Modal */}
       {viewingStudentsClass && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in">
+        <div className="fixed inset-0 bg-transparent flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in">
           <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl my-auto relative overflow-hidden animate-slide-up">
             <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
             

@@ -612,7 +612,7 @@ const Certificates: React.FC<CertificatesProps> = ({ data, updateData }) => {
 
       {/* TEMPLATE MODAL */}
       {showTemplateModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-300">
+        <div className="fixed inset-0 bg-transparent z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-300">
           <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh] my-auto animate-slide-up">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-indigo-50/30">
               <div>

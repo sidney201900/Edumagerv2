@@ -394,7 +394,7 @@ const Contracts: React.FC<ContractsProps> = ({ data, updateData }) => {
 
       {/* CREATE CONTRACT MODAL */}
       {isModalOpen && (
-        <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
+        <div className={`fixed inset-0 bg-transparent flex items-center justify-center p-4 z-50 transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
           <div className={`bg-white rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl transition-all duration-400 ${isClosing ? 'animate-slide-down-fade-out' : 'animate-slide-up'}`}>
             <div className="h-2 bg-indigo-600 w-full"></div>
             <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-indigo-50/30">
@@ -421,7 +421,7 @@ const Contracts: React.FC<ContractsProps> = ({ data, updateData }) => {
 
       {/* CREATE/EDIT TEMPLATE MODAL */}
       {isTemplateModalOpen && (
-        <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
+        <div className={`fixed inset-0 bg-transparent flex items-center justify-center p-4 z-50 transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
           <div className={`bg-white rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl transition-all duration-400 ${isClosing ? 'animate-slide-down-fade-out' : 'animate-slide-up'}`}>
             <div className="h-2 bg-indigo-600 w-full"></div>
             <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-indigo-50/30">
@@ -463,7 +463,7 @@ const Contracts: React.FC<ContractsProps> = ({ data, updateData }) => {
 
       {/* GENERATE INSTALLMENTS MODAL */}
       {showGenerateModal && (
-        <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
+        <div className={`fixed inset-0 bg-transparent flex items-center justify-center p-4 z-50 transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
           <div className={`bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl transition-all duration-400 ${isClosing ? 'animate-slide-down-fade-out' : 'animate-slide-up'}`}>
             <div className="h-2 bg-emerald-600 w-full"></div>
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-emerald-50">

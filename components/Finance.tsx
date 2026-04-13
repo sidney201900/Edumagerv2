@@ -1420,7 +1420,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
 
       {/* DELETE CONFIRMATION MODAL */}
       {showDeleteModal && paymentToDelete && (
-        <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
+        <div className={`fixed inset-0 bg-transparent flex items-center justify-center p-4 z-50 overflow-y-auto transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
           <div className={`bg-white rounded-xl w-full max-w-sm shadow-2xl my-auto transition-all duration-400 relative overflow-hidden ${isClosing ? 'animate-slide-down-fade-out' : 'animate-slide-up'}`}>
             {/* Blue Top Bar */}
             <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
@@ -1460,7 +1460,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
 
       {/* FALLBACK CARNE MODAL */}
       {showFallbackModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in">
+        <div className="fixed inset-0 bg-transparent flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in">
           <div className="bg-white rounded-xl w-full max-w-3xl shadow-2xl my-auto relative overflow-hidden animate-slide-up">
             <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
 
@@ -1530,7 +1530,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
       {/* PRINT CARNE MODAL */}
 
       {carneToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-transparent animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl w-full max-w-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] animate-slide-up">
             <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 relative overflow-hidden">
               <div className="relative z-10 flex items-center gap-4">
@@ -1578,7 +1578,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
       )}
 
       {paymentToEdit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-transparent animate-in fade-in duration-200">
           <form onSubmit={handleEditSave} className="bg-white rounded-3xl w-full max-w-md shadow-xl overflow-hidden flex flex-col relative animate-slide-up">
             <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
               <h3 className="text-xl font-black text-slate-800 tracking-tight">Editar Cobrança</h3>
@@ -1601,7 +1601,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
         </div>
       )}
       {showInstallmentSelectModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in">
+        <div className="fixed inset-0 bg-transparent flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in">
           <div className="bg-white rounded-xl w-full max-w-2xl shadow-2xl my-auto relative overflow-hidden animate-slide-up">
             <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
             <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-indigo-50/30">
@@ -1631,7 +1631,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
         </div>
       )}
       {showPrintCarneModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in">
+        <div className="fixed inset-0 bg-transparent flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in">
           <div className="bg-white rounded-xl w-full max-w-2xl shadow-2xl my-auto relative overflow-hidden animate-slide-up">
             <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
 
@@ -1691,7 +1691,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
 
       {/* Supabase Manager Modal */}
       {showSupabaseModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60] overflow-hidden animate-in fade-in">
+        <div className="fixed inset-0 bg-transparent flex items-center justify-center p-4 z-[60] overflow-hidden animate-in fade-in">
           <div className="bg-white rounded-2xl w-full max-w-6xl h-[90vh] shadow-2xl flex flex-col relative overflow-hidden animate-slide-up">
             <div className="bg-slate-800 h-1.5 w-full absolute top-0 left-0 z-10"></div>
             

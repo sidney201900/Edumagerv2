@@ -457,8 +457,8 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
 
       {/* MODAL DE EDIÇÃO */}
       {editingTemplate && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 bg-transparent z-50 flex items-center justify-center p-4 animate-in fade-in duration-400">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl relative overflow-hidden animate-slide-up duration-400 border border-slate-100">
             <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <div>
                 <h3 className="text-xl font-black text-slate-800">{editingTemplate.label}</h3>
