@@ -388,7 +388,7 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
       {/* === MODAL 2: Histórico Individual do Aluno === */}
       {showStudentHistoryModal && selectedStudent && selectedClass && (
         <div className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60] flex items-center justify-center p-4 transition-opacity duration-400 ${isClosing2 ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
-          <div className={`bg-white rounded-3xl w-full max-w-3xl max-h-[85vh] overflow-hidden shadow-2xl transition-all duration-400 relative flex flex-col ${isClosing2 ? 'animate-slide-down-fade-out' : 'animate-slide-up'}`}>
+          <div className={`bg-white rounded-3xl w-full max-w-5xl max-h-[90vh] overflow-hidden shadow-2xl transition-all duration-400 relative flex flex-col ${isClosing2 ? 'animate-slide-down-fade-out' : 'animate-slide-up'}`}>
             <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>
 
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
@@ -493,7 +493,9 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                         <thead className="bg-slate-50 text-slate-500 text-[10px] uppercase font-bold tracking-wider sticky top-0">
                           <tr>
                             <th className="px-6 py-4 text-sm">Data</th>
-                            <th className="px-6 py-4 text-sm">Horário</th>
+                            <th className="px-6 py-4 text-sm">Início (Aula)</th>
+                            <th className="px-6 py-4 text-sm">Término (Aula)</th>
+                            <th className="px-6 py-4 text-sm">Registro</th>
                             <th className="px-6 py-4 text-sm">Status</th>
                             <th className="px-6 py-4 text-sm">Justificativa</th>
                             <th className="px-6 py-4 text-sm text-center">Anexo</th>
@@ -505,6 +507,12 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                             const recordDate = new Date(record.date);
                             const time = recordDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                             
+                            // Find corresponding lesson times
+                            const lesson = data.lessons.find(l => 
+                              (record.isVirtual && record.id === `v-${l.id}`) || 
+                              (l.date === record.date.split('T')[0] && l.classId === record.classId)
+                            );
+
                             let justMotivo = record.justification || '';
                             let justAttachment: string | null = null;
                             if (justMotivo.startsWith('{')) {
@@ -526,8 +534,20 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                                 <td className="px-6 py-4 text-base font-bold text-slate-800">
                                   {recordDate.toLocaleDateString('pt-BR')}
                                 </td>
-                                <td className="px-6 py-4 text-sm text-slate-500 flex items-center gap-1.5 pt-5">
-                                  <Clock size={14} /> {record.isVirtual ? "--:--" : time}
+                                <td className="px-6 py-4 text-sm font-bold text-indigo-600">
+                                  <div className="flex items-center gap-1.5">
+                                    <Clock size={14} className="text-slate-400" /> {lesson?.startTime || '--:--'}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 text-sm font-bold text-indigo-600">
+                                  <div className="flex items-center gap-1.5">
+                                    <Clock size={14} className="text-slate-400" /> {lesson?.endTime || '--:--'}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 text-sm text-slate-500 font-medium">
+                                  <div className="flex items-center gap-1.5">
+                                    <Clock size={14} /> {record.isVirtual ? "--:--" : time}
+                                  </div>
                                 </td>
                                 <td className="px-6 py-4">
                                   {isAwaiting ? (
@@ -636,7 +656,7 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
 
       {/* Justified Absence Modal */}
       {showAbsenceModal && (
-        <div className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
+        <div className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[70] flex items-center justify-center p-4 transition-opacity duration-400 ${isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in'}`}>
           <div className={`bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl transition-all duration-400 relative ${isClosing ? 'animate-slide-down-fade-out' : 'animate-slide-up'}`}>
             {/* Blue Top Bar */}
             <div className="bg-indigo-600 h-1.5 w-full absolute top-0 left-0 z-10"></div>

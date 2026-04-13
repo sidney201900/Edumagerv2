@@ -473,16 +473,6 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
       return;
     }
 
-    if (val === 'registration_fee') {
-      setSelectedItemType('registration');
-      setFormData(prev => ({
-        ...formData,
-        amount: 150, // Default registration fee
-        description: 'Taxa de Matrícula',
-        type: 'registration'
-      }));
-      return;
-    }
 
     if (val.startsWith('course_')) {
       const courseId = val.replace('course_', '');
@@ -1274,7 +1264,6 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Referente a (Opcional)</label>
                 <select className={inputClass + " w-full"} value={selectedItemId} onChange={handleItemSelect}>
                   <option value="">Lançamento Avulso / Personalizado</option>
-                  <option value="registration_fee">Taxa de Matrícula Padrão</option>
                   <optgroup label="Cursos">
                     {data.courses?.map(c => <option key={`course_${c.id}`} value={`course_${c.id}`}>{c.name} - R$ {c.monthlyFee.toFixed(2)}</option>)}
                   </optgroup>
