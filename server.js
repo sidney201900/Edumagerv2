@@ -233,6 +233,7 @@ async function sendEvolutionMessage(asaasPaymentId, eventType, paymentPayload = 
     let msgFinal = templateText
       .replace(/{nome}/g, targetName)
       .replace(/{nome_aluno}/g, aluno.name)
+      .replace(/{matricula}/g, aluno.enrollmentNumber || aluno.matricula || '—')
       .replace(/{valor}/g, parseFloat(fallbackValor).toFixed(2).replace('.', ','))
       .replace(/{vencimento}/g, formatCobrancaDate(fallbackVencimento))
       .replace(/{link_boleto}/g, pdfUrl)
@@ -702,7 +703,9 @@ async function processarFilaWhatsApp(alunos, mensagemTemplate) {
 
   for (let i = 0; i < alunos.length; i++) {
     const aluno = alunos[i];
-    const mensagemPersonalizada = mensagemTemplate.replace(/{nome}/g, aluno.nome);
+    const mensagemPersonalizada = mensagemTemplate
+      .replace(/{nome}/g, aluno.nome)
+      .replace(/{matricula}/g, aluno.matricula || '—');
 
     try {
       let cleanPhone = aluno.telefone.replace(/\D/g, '');

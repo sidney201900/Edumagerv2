@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SchoolData } from '../types';
 import { useDialog } from '../DialogContext';
-import { MessageSquare, Save, Info, Settings, Send, Clock, AlertTriangle, FileText, CheckCircle, Cake } from 'lucide-react';
+import { MessageSquare, Save, Info, Settings, Send, Clock, AlertTriangle, FileText, CheckCircle, Cake, X } from 'lucide-react';
 
 interface MessagesProps {
   data: SchoolData;
@@ -44,6 +44,16 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
   const [messageText, setMessageText] = useState('');
   const [isSendingMass, setIsSendingMass] = useState(false);
   const [isSendingBdays, setIsSendingBdays] = useState(false);
+  
+  // Modal de Edição de Modelo
+  const [editingTemplate, setEditingTemplate] = useState<{
+    key: keyof typeof defaultTemplates | 'felizAniversario', 
+    label: string, 
+    desc: string, 
+    color: string, 
+    icon: any,
+    vars: string[]
+  } | null>(null);
 
   const normalizeLineBreaks = (text: string) => text.replace(/\r\n/g, '\n');
 
@@ -54,18 +64,6 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
     const bdayMonth = parseInt(bdayParts[1]);
     const today = new Date();
     return bdayDay === today.getDate() && bdayMonth === (today.getMonth() + 1);
-  });
-
-  const monthBirthdayStudents = (data.students || []).filter(s => {
-    if (!s.birthDate || s.status !== 'active') return false;
-    const bdayParts = s.birthDate.split('-');
-    const bdayMonth = parseInt(bdayParts[1]);
-    const today = new Date();
-    return bdayMonth === (today.getMonth() + 1);
-  }).sort((a, b) => {
-    const dayA = parseInt(a.birthDate!.split('-')[2]);
-    const dayB = parseInt(b.birthDate!.split('-')[2]);
-    return dayA - dayB;
   });
 
   const handleSendBirthdays = async () => {
@@ -182,7 +180,7 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
         }
       }
 
-      return { nome, telefone };
+      return { nome, telefone, matricula: a.enrollmentNumber || '—' };
     });
 
     setIsSendingMass(true);
@@ -208,6 +206,33 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
     }
   };
 
+  const templateCards = [
+    { key: 'boletoGerado', label: 'Boleto Gerado / Novo Carnê', desc: 'Enviado assim que a cobrança é criada no sistema.', color: 'blue', icon: FileText, vars: ['{nome}', '{matricula}', '{descricao}', '{valor}', '{vencimento}', '{link_boleto}', '{escola}'] },
+    { key: 'pagamentoConfirmado', label: 'Pagamento Confirmado', desc: 'Enviado quando o sistema (Asaas) compensa o pagamento.', color: 'emerald', icon: CheckCircle, vars: ['{nome}', '{matricula}', '{descricao}', '{valor}', '{escola}'] },
+    { key: 'boletoVencido', label: 'Boleto Vencido', desc: 'Enviado conforme automação ou disparo manual de atrasados.', color: 'red', icon: AlertTriangle, vars: ['{nome}', '{matricula}', '{descricao}', '{valor}', '{vencimento}', '{link_boleto}', '{escola}'] },
+    { key: 'cobrancaCancelada', label: 'Cobrança Cancelada', desc: 'Enviado quando o boleto for cancelado no sistema.', color: 'slate', icon: AlertTriangle, vars: ['{nome}', '{matricula}', '{descricao}', '{escola}'] },
+    { key: 'cobrancaAtualizada', label: 'Cobrança Atualizada', desc: 'Enviado quando houver edição/atualização da cobrança.', color: 'amber', icon: Settings, vars: ['{nome}', '{matricula}', '{descricao}', '{valor}', '{vencimento}', '{link_boleto}', '{escola}'] },
+    { key: 'felizAniversario', label: 'Feliz Aniversário', desc: 'Mensagem carinhosa para os aniversariantes do dia.', color: 'pink', icon: Cake, vars: ['{nome}', '{escola}'] }
+  ];
+
+  const insertVariable = (variable: string) => {
+    if (!editingTemplate) return;
+    const textarea = document.getElementById('template-editor') as HTMLTextAreaElement;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = (templates[editingTemplate.key as keyof typeof templates] as string) || '';
+    const newText = text.substring(0, start) + variable + text.substring(end);
+    
+    setTemplates(p => ({ ...p, [editingTemplate.key]: newText }));
+    
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + variable.length, start + variable.length);
+    }, 10);
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300 pb-20">
       <header className="flex justify-between items-end">
@@ -219,34 +244,18 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
           onClick={handleSave}
           className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all"
         >
-          <Save size={18} /> Salvar Alterações
+          <Save size={18} /> Salvar Tudo
         </button>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Lado Esquerdo - Variáveis e Configurações */}
+        {/* Lado Esquerdo - Configurações e Disparos */}
         <div className="space-y-6">
-          <div className="bg-indigo-50 border border-indigo-100 p-6 rounded-xl shadow-sm">
-            <h3 className="font-bold text-indigo-800 flex items-center gap-2 mb-4">
-              <Info size={18} /> Variáveis Dinâmicas
-            </h3>
-            <p className="text-sm text-indigo-700/80 mb-4">
-              Você pode utilizar os códigos abaixo em seus textos. Eles serão substituídos automaticamente pelas informações do sistema no envio.
-            </p>
-            <ul className="space-y-2 text-sm text-indigo-800 font-medium">
-              <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> <code className="bg-white/60 px-2 py-0.5 rounded text-indigo-900">{'{nome}'}</code> - Nome do destinatário (Aluno ou Responsável)</li>
-              <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> <code className="bg-white/60 px-2 py-0.5 rounded text-indigo-900">{'{descricao}'}</code> - Descrição da cobrança no Asaas</li>
-              <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> <code className="bg-white/60 px-2 py-0.5 rounded text-indigo-900">{'{valor}'}</code> - Valor da cobrança</li>
-              <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> <code className="bg-white/60 px-2 py-0.5 rounded text-indigo-900">{'{vencimento}'}</code> - Data de Vencimento</li>
-              <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> <code className="bg-white/60 px-2 py-0.5 rounded text-indigo-900">{'{link_boleto}'}</code> - Link para PDF/Pgto</li>
-              <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> <code className="bg-white/60 px-2 py-0.5 rounded text-indigo-900">{'{escola}'}</code> - Nome da Escola</li>
-            </ul>
-          </div>
-
-          <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-xl">
-            <h3 className="font-black text-slate-800 flex items-center gap-2 mb-6">
-              <Clock size={20} className="text-indigo-600" /> Automação de Cobrança
+          
+          <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-xl">
+            <h3 className="font-black text-slate-800 flex items-center gap-2 mb-6 text-sm uppercase tracking-widest text-indigo-600">
+              <Clock size={18} /> Automação
             </h3>
             
             <div className="space-y-5">
@@ -257,30 +266,30 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
                   onChange={(e) => setTemplates(p => ({ ...p, automationRules: { ...p.automationRules, sendOnDueDate: e.target.checked } }))}
                   className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                 />
-                <span className="text-sm font-semibold text-slate-700">Enviar aviso no dia do vencimento</span>
+                <span className="text-sm font-bold text-slate-700">Aviso no dia do vencimento</span>
               </label>
 
-              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Enviar 1º aviso de atraso após</label>
-                <div className="flex items-center gap-3 text-sm text-slate-700 font-medium">
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">1º aviso após</label>
+                <div className="flex items-center gap-3 text-sm text-slate-700 font-bold">
                   <input 
                     type="number" min="1" max="30"
                     value={templates.automationRules.sendDaysAfter}
                     onChange={(e) => setTemplates(p => ({ ...p, automationRules: { ...p.automationRules, sendDaysAfter: e.target.value } }))}
-                    className="w-20 px-3 py-2 border border-slate-200 rounded-lg text-center"
+                    className="w-16 px-3 py-2 border border-slate-200 rounded-lg text-center bg-white shadow-sm"
                   />
-                  <span>dias do vencimento</span>
+                  <span>dias</span>
                 </div>
               </div>
 
-              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Repetir cobrança de atrasados a cada</label>
-                <div className="flex items-center gap-3 text-sm text-slate-700 font-medium">
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Repetir a cada</label>
+                <div className="flex items-center gap-3 text-sm text-slate-700 font-bold">
                   <input 
                     type="number" min="1" max="30"
                     value={templates.automationRules.repeatEveryDays}
                     onChange={(e) => setTemplates(p => ({ ...p, automationRules: { ...p.automationRules, repeatEveryDays: e.target.value } }))}
-                    className="w-20 px-3 py-2 border border-slate-200 rounded-lg text-center"
+                    className="w-16 px-3 py-2 border border-slate-200 rounded-lg text-center bg-white shadow-sm"
                   />
                   <span>dias</span>
                 </div>
@@ -288,304 +297,224 @@ const Messages: React.FC<MessagesProps> = ({ data, updateData }) => {
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 p-6 rounded-xl shadow-lg">
-            <h3 className="font-black text-amber-800 flex items-center gap-2 mb-3">
-              <AlertTriangle size={20} /> Ação Manual
+          <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-2xl shadow-lg">
+            <h3 className="font-black text-emerald-800 flex items-center gap-2 mb-4 text-sm uppercase tracking-widest">
+              <MessageSquare size={18} /> Disparo em Massa
             </h3>
-            <p className="text-sm text-amber-700/80 mb-5 leading-relaxed">
-              Use este botão para processar imediatamente todos os pagamentos marcados como "Atrasado" e enviar o modelo "Boleto Vencido" para os responsáveis.
-            </p>
-            <button 
-              onClick={handleDispararCobrancas}
-              disabled={isSending || !data.evolutionConfig?.apiUrl}
-              className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm text-white shadow-md transition-all ${
-                isSending || !data.evolutionConfig?.apiUrl 
-                ? 'bg-slate-400 cursor-not-allowed' 
-                : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 hover:scale-[1.02]'
-              }`}
-            >
-              {isSending ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                  Conectando API...
-                </>
-              ) : (
-                <>
-                  <Send size={18} /> Disparar Cobranças Atrasadas Agora
-                </>
-              )}
-            </button>
-            {!data.evolutionConfig?.apiUrl && (
-              <p className="mt-3 text-xs text-amber-700 text-center font-medium">Configure a Evolution API nas Configurações.</p>
-            )}
-          </div>
-
-          <div className="bg-gradient-to-br from-pink-50 to-rose-50 border border-pink-200 p-6 rounded-xl shadow-lg">
-            <h3 className="font-black text-pink-800 flex items-center gap-2 mb-3">
-              <Cake size={20} /> Aniversariantes do Dia
-            </h3>
-            <p className="text-sm text-pink-700/80 mb-5 leading-relaxed">
-              O sistema identificou <strong>{birthdayStudents.length}</strong> alunos fazendo aniversário hoje ({new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}).
-            </p>
-            <button 
-              onClick={handleSendBirthdays}
-              disabled={isSendingBdays || birthdayStudents.length === 0 || !data.evolutionConfig?.apiUrl}
-              className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm text-white shadow-md transition-all ${
-                isSendingBdays || birthdayStudents.length === 0 || !data.evolutionConfig?.apiUrl
-                ? 'bg-slate-400 cursor-not-allowed' 
-                : 'bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 hover:scale-[1.02]'
-              }`}
-            >
-              {isSendingBdays ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                  Processando...
-                </>
-              ) : (
-                <>
-                  <Cake size={18} /> Parabenizar Aniversariantes Now
-                </>
-              )}
-            </button>
-            {birthdayStudents.length > 0 && (
-              <div className="mt-4 space-y-1 max-h-32 overflow-y-auto">
-                {birthdayStudents.map(s => (
-                  <div key={s.id} className="text-[11px] font-bold text-pink-600 bg-white/40 px-2 py-1 rounded flex justify-between">
-                    <span>{s.name}</span>
-                    <span className="opacity-60">{s.phone || s.guardianPhone || 'S/ Tel'}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-lg">
-            <h3 className="font-black text-slate-800 flex items-center gap-2 mb-3">
-              <Cake size={20} className="text-indigo-600" /> Aniversariantes do Mês
-            </h3>
-            <p className="text-sm text-slate-500 mb-5 leading-relaxed">
-              Explorar os <strong>{monthBirthdayStudents.length}</strong> aniversariantes deste mês ({new Date().toLocaleString('pt-BR', { month: 'long' })}).
-            </p>
-            <div className="space-y-1 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-              {monthBirthdayStudents.length > 0 ? (
-                monthBirthdayStudents.map(s => {
-                  const bdayDay = s.birthDate?.split('-')[2];
-                  const today = new Date();
-                  const isToday = parseInt(bdayDay || '0') === today.getDate();
-                  
-                  return (
-                    <div key={s.id} className={`text-[11px] font-bold px-3 py-2 rounded-lg flex justify-between items-center ${isToday ? 'bg-pink-100 text-pink-700 border border-pink-200' : 'bg-slate-50 text-slate-600 border border-slate-100 hover:bg-slate-100'}`}>
-                      <div className="flex items-center gap-2">
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] ${isToday ? 'bg-pink-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                          {bdayDay}
-                        </span>
-                        <span className="truncate max-w-[120px]">{s.name}</span>
-                      </div>
-                      <span className="text-[9px] opacity-60 font-black">{s.phone || s.guardianPhone || 'S/ Tel'}</span>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="text-center text-[11px] text-slate-400 py-4">Nenhum aniversariante neste mês.</p>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-xl shadow-lg mt-8">
-            <h3 className="font-black text-emerald-800 flex items-center gap-2 mb-3">
-              <MessageSquare size={20} /> Disparo em Massa (Anti-Ban)
-            </h3>
-            <p className="text-sm text-emerald-700/80 mb-5 leading-relaxed">
-              Dispare mensagens personalizadas sem risco de bloqueio. O sistema enviará em segundo plano com pausas de 1 a 3 minutos entre envios.
-            </p>
             
             <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-emerald-700 uppercase mb-2">Público-Alvo</label>
+              <select 
+                className="w-full px-3 py-2.5 border border-emerald-200 rounded-xl text-sm bg-white font-bold"
+                value={targetType}
+                onChange={(e) => { setTargetType(e.target.value); setTargetId(''); }}
+              >
+                <option value="todos">Todos os Alunos</option>
+                <option value="turma">Uma Turma</option>
+                <option value="aluno">Um Aluno</option>
+              </select>
+
+              {targetType !== 'todos' && (
                 <select 
-                  className="w-full px-3 py-2 border border-emerald-200 rounded-lg text-sm bg-white focus:ring-emerald-500"
-                  value={targetType}
-                  onChange={(e) => { setTargetType(e.target.value); setTargetId(''); }}
+                  className="w-full px-3 py-2.5 border border-emerald-200 rounded-xl text-sm bg-white font-bold"
+                  value={targetId}
+                  onChange={(e) => setTargetId(e.target.value)}
                 >
-                  <option value="todos">Todos os Alunos</option>
-                  <option value="turma">Uma Turma Específica</option>
-                  <option value="aluno">Um Aluno Específico</option>
+                  <option value="">-- Selecione --</option>
+                  {targetType === 'turma' 
+                    ? data.classes?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)
+                    : data.students?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)
+                  }
                 </select>
-              </div>
-
-              {targetType === 'turma' && (
-                <div>
-                  <label className="block text-xs font-bold text-emerald-700 uppercase mb-2">Selecione a Turma</label>
-                  <select 
-                    className="w-full px-3 py-2 border border-emerald-200 rounded-lg text-sm bg-white"
-                    value={targetId}
-                    onChange={(e) => setTargetId(e.target.value)}
-                  >
-                    <option value="">-- Escolha a Turma --</option>
-                    {data.classes?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-              )}
-
-              {targetType === 'aluno' && (
-                <div>
-                  <label className="block text-xs font-bold text-emerald-700 uppercase mb-2">Selecione o Aluno</label>
-                  <select 
-                    className="w-full px-3 py-2 border border-emerald-200 rounded-lg text-sm bg-white"
-                    value={targetId}
-                    onChange={(e) => setTargetId(e.target.value)}
-                  >
-                    <option value="">-- Escolha o Aluno --</option>
-                    {data.students?.map(s => <option key={s.id} value={s.id}>{s.name} ({s.cpf})</option>)}
-                  </select>
-                </div>
               )}
 
               <div>
-                <label className="block text-xs font-bold text-emerald-700 uppercase mb-2">Mensagem</label>
+                <label className="block text-[10px] font-black text-emerald-600 uppercase mb-2 ml-1">Mensagem Personalizada</label>
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {['{nome}', '{matricula}'].map(v => (
+                    <button 
+                      key={v}
+                      onClick={() => {
+                        const textarea = document.getElementById('mass-editor') as HTMLTextAreaElement;
+                        if (!textarea) return;
+                        const start = textarea.selectionStart;
+                        const end = textarea.selectionEnd;
+                        const newText = messageText.substring(0, start) + v + messageText.substring(end);
+                        setMessageText(newText);
+                        setTimeout(() => { textarea.focus(); textarea.setSelectionRange(start + v.length, start + v.length); }, 10);
+                      }}
+                      className="text-[9px] bg-emerald-100/50 text-emerald-700 px-2 py-1 rounded-md border border-emerald-200 hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
                 <textarea 
+                  id="mass-editor"
                   rows={4}
-                  className="w-full px-3 py-2 border border-emerald-200 rounded-lg text-sm bg-white focus:ring-emerald-500"
-                  placeholder="Escreva sua mensagem aqui..."
+                  className="w-full px-3 py-3 border border-emerald-200 rounded-xl text-sm bg-white focus:ring-emerald-500 font-medium shadow-sm"
+                  placeholder="Escreva sua mensagem..."
                   value={messageText}
                   onChange={(e) => setMessageText(e.target.value)}
                 />
-                <p className="text-[11px] text-emerald-600 font-medium mt-1">Dica: Use {"{nome}"} para personalizar a mensagem com o nome de cada destinatário.</p>
               </div>
 
               <button 
                 onClick={handleMassSend}
                 disabled={isSendingMass || !data.evolutionConfig?.apiUrl}
-                className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm text-white shadow-md transition-all ${
-                  isSendingMass || !data.evolutionConfig?.apiUrl
-                  ? 'bg-slate-400 cursor-not-allowed'
-                  : 'bg-emerald-600 hover:bg-emerald-700 hover:scale-[1.02]'
+                className={`w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl font-black text-sm text-white transition-all shadow-lg active:scale-95 ${
+                  isSendingMass || !data.evolutionConfig?.apiUrl ? 'bg-slate-400' : 'bg-emerald-600 hover:bg-emerald-700'
                 }`}
               >
-                {isSendingMass ? (
-                  <><div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" /> Iniciando...</>
-                ) : (
-                  <><Send size={18} /> Iniciar Disparo</>
-                )}
+                {isSendingMass ? 'Iniciando...' : 'Iniciar Disparo'}
               </button>
             </div>
           </div>
+
+          <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl shadow-lg">
+            <h3 className="font-black text-amber-800 flex items-center gap-2 mb-3 text-sm uppercase tracking-widest">
+              <AlertTriangle size={18} /> Inadimplência
+            </h3>
+            <button 
+              onClick={handleDispararCobrancas}
+              disabled={isSending || !data.evolutionConfig?.apiUrl}
+              className={`w-full py-3.5 px-4 rounded-xl font-black text-sm text-white shadow-lg transition-all active:scale-95 ${
+                isSending || !data.evolutionConfig?.apiUrl ? 'bg-slate-400' : 'bg-amber-500 hover:bg-amber-600'
+              }`}
+            >
+              {isSending ? 'Processando...' : 'Disparar Cobranças Now'}
+            </button>
+          </div>
+
+          <div className="bg-pink-50 border border-pink-200 p-6 rounded-2xl shadow-lg">
+            <h3 className="font-black text-pink-800 flex items-center gap-2 mb-3 text-sm uppercase tracking-widest">
+              <Cake size={18} /> Aniversariantes
+            </h3>
+            <button 
+              onClick={handleSendBirthdays}
+              disabled={isSendingBdays || birthdayStudents.length === 0 || !data.evolutionConfig?.apiUrl}
+              className={`w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl font-black text-sm text-white shadow-xl transition-all active:scale-95 mb-4 ${
+                isSendingBdays || birthdayStudents.length === 0 || !data.evolutionConfig?.apiUrl ? 'bg-slate-400' : 'bg-pink-500 hover:bg-pink-600'
+              }`}
+            >
+              {isSendingBdays ? 'Enviando...' : 'Parabenizar Todos'}
+            </button>
+
+            <div className="pt-4 border-t border-pink-100">
+              <label className="block text-[10px] font-black text-pink-400 uppercase tracking-widest mb-3">Próximos do Mês</label>
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                {(data.students || []).filter(s => {
+                  if (!s.birthDate || s.status !== 'active') return false;
+                  return parseInt(s.birthDate.split('-')[1]) === (new Date().getMonth() + 1);
+                }).sort((a,b) => parseInt(a.birthDate!.split('-')[2]) - parseInt(b.birthDate!.split('-')[2])).map(s => {
+                  const day = s.birthDate?.split('-')[2];
+                  return (
+                    <div key={s.id} className="flex justify-between items-center text-[10px] font-bold text-pink-700 bg-white/40 p-2 rounded-lg border border-pink-100/50">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 bg-pink-100 rounded-full flex items-center justify-center text-[9px]">{day}</span>
+                        <span className="truncate max-w-[100px]">{s.name}</span>
+                      </div>
+                      <span className="opacity-60">{s.phone || 'S/ Tel'}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Lado Direito - Textareas */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-xl">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
-                <FileText size={20} />
+        {/* Lado Direito - Cards de Modelos */}
+        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+          {templateCards.map((card) => {
+            const Icon = card.icon;
+            const colors: any = {
+              blue: 'bg-blue-50 text-blue-600',
+              emerald: 'bg-emerald-50 text-emerald-600',
+              red: 'bg-red-50 text-red-600',
+              slate: 'bg-slate-50 text-slate-600',
+              amber: 'bg-amber-50 text-amber-600',
+              pink: 'bg-pink-50 text-pink-600',
+            };
+            
+            return (
+              <div 
+                key={card.key}
+                onClick={() => setEditingTemplate(card as any)}
+                className="bg-white border border-slate-200 rounded-3xl p-6 cursor-pointer transition-all hover:shadow-2xl hover:-translate-y-1 group relative overflow-hidden active:scale-95"
+              >
+                <div className={`w-12 h-12 rounded-2xl ${colors[card.color]} flex items-center justify-center mb-5 group-hover:scale-110 transition-transform shadow-sm`}>
+                  <Icon size={24} />
+                </div>
+                <h4 className="font-black text-slate-800 text-lg mb-2">{card.label}</h4>
+                <p className="text-xs text-slate-500 font-medium leading-relaxed">{card.desc}</p>
+                <div className="mt-6 flex items-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest border-t border-slate-50 pt-4">
+                  Editar Modelo <Settings size={12} className="group-hover:rotate-45 transition-transform" />
+                </div>
               </div>
-              <div>
-                <h3 className="font-bold text-slate-800 text-lg">Boleto Gerado / Novo Carnê</h3>
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Enviado assim que a cobrança é criada</p>
-              </div>
-            </div>
-            <textarea 
-              value={templates.boletoGerado}
-              onChange={(e) => setTemplates(p => ({ ...p, boletoGerado: e.target.value }))}
-              rows={4}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y text-slate-700 text-sm font-medium"
-            />
-          </div>
-
-          <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-xl">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600">
-                <CheckCircle size={20} />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-800 text-lg">Pagamento Confirmado</h3>
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Enviado quando o sistema (Asaas) compensa o pagamento</p>
-              </div>
-            </div>
-            <textarea 
-              value={templates.pagamentoConfirmado}
-              onChange={(e) => setTemplates(p => ({ ...p, pagamentoConfirmado: e.target.value }))}
-              rows={4}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y text-slate-700 text-sm font-medium"
-            />
-          </div>
-
-          <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-xl border-t-4 border-t-red-500">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center text-red-600">
-                <AlertTriangle size={20} />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-800 text-lg">Boleto Vencido</h3>
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Enviado conforme automação ou disparo manual</p>
-              </div>
-            </div>
-            <textarea 
-              value={templates.boletoVencido}
-              onChange={(e) => setTemplates(p => ({ ...p, boletoVencido: e.target.value }))}
-              rows={4}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y text-slate-700 text-sm font-medium"
-            />
-          </div>
-
-          <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-xl">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-500">
-                <AlertTriangle size={20} />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-800 text-lg">Cobrança Cancelada / Excluída</h3>
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Enviado quando o boleto for cancelado no sistema</p>
-              </div>
-            </div>
-            <textarea 
-              value={templates.cobrancaCancelada}
-              onChange={(e) => setTemplates(p => ({ ...p, cobrancaCancelada: e.target.value }))}
-              rows={3}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y text-slate-700 text-sm font-medium"
-            />
-          </div>
-
-          <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-xl border-t-4 border-t-amber-400">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center text-amber-600">
-                <Settings size={20} />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-800 text-lg">Cobrança Atualizada / Alterada</h3>
-                <p className="text-[11px] font-bold text-amber-500 uppercase tracking-widest">Enviado quando houver edição/atualização da cobrança</p>
-              </div>
-            </div>
-            <textarea 
-              value={templates.cobrancaAtualizada}
-              onChange={(e) => setTemplates(p => ({ ...p, cobrancaAtualizada: e.target.value }))}
-              rows={4}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 resize-y text-slate-700 text-sm font-medium"
-            />
-          </div>
-
-          <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-xl border-t-4 border-t-pink-500">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-full bg-pink-50 flex items-center justify-center text-pink-600">
-                <Cake size={20} />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-800 text-lg">Feliz Aniversário</h3>
-                <p className="text-[11px] font-bold text-pink-500 uppercase tracking-widest">Mensagem para os aniversariantes do dia</p>
-              </div>
-            </div>
-            <textarea 
-              value={templates.felizAniversario}
-              onChange={(e) => setTemplates(p => ({ ...p, felizAniversario: e.target.value }))}
-              rows={4}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 resize-y text-slate-700 text-sm font-medium"
-            />
-            <p className="mt-3 text-[11px] text-slate-500 font-medium">Use {"{nome}"} para o nome do aluno e {"{escola}"} para o nome da escola.</p>
-          </div>
-
+            );
+          })}
         </div>
-
       </div>
+
+      {/* MODAL DE EDIÇÃO */}
+      {editingTemplate && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div>
+                <h3 className="text-xl font-black text-slate-800">{editingTemplate.label}</h3>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{editingTemplate.key}</p>
+              </div>
+              <button 
+                onClick={() => setEditingTemplate(null)} 
+                className="p-3 bg-white text-slate-400 hover:text-red-500 rounded-2xl shadow-md transition-all hover:rotate-90 border border-slate-100"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-8 space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Clique para inserir variável</label>
+                <div className="flex flex-wrap gap-2 text-[10px] font-black">
+                  {editingTemplate.vars.map(v => (
+                    <button 
+                      key={v} 
+                      onClick={() => insertVariable(v)} 
+                      className="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-600 hover:text-white transition-all active:scale-95 border border-indigo-100 shadow-sm"
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <textarea 
+                id="template-editor"
+                value={(templates[editingTemplate.key as keyof typeof templates] as string) || ''}
+                onChange={(e) => setTemplates(p => ({ ...p, [editingTemplate.key]: e.target.value }))}
+                rows={10}
+                className="w-full px-6 py-5 bg-slate-50 border-2 border-slate-100 rounded-[2rem] focus:border-indigo-500 focus:bg-white focus:outline-none transition-all text-slate-700 font-medium shadow-inner resize-none"
+                placeholder="Escreva sua mensagem..."
+              />
+
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => setEditingTemplate(null)} 
+                  className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all active:scale-95"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={() => { handleSave(); setEditingTemplate(null); }} 
+                  className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all active:scale-95"
+                >
+                  Salvar Modelo
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
