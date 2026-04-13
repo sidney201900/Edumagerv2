@@ -122,6 +122,18 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
     }, 400);
   };
 
+  const handleAddAbsence = () => {
+    if (!absenceStudentId || !absenceJustification || !absenceLessonId) {
+      showAlert('Atenção', "⚠️ Por favor, preencha todos os campos da justificativa.", 'warning');
+      return;
+    }
+
+    const student = data.students.find(s => s.id === absenceStudentId);
+    if (!student) {
+      showAlert('Erro', "Aluno não encontrado.", 'error');
+      return;
+    }
+
     const lesson = data.lessons.find(l => l.id === absenceLessonId);
     if (!lesson) {
       showAlert('Atenção', "⚠️ Por favor, selecione a aula para justificar.", 'warning');
