@@ -21,7 +21,8 @@ import {
   Library,
   Briefcase,
   LogOut,
-  MessageSquare
+  MessageSquare,
+  ClipboardList
 } from 'lucide-react';
 import { isSupabaseConfigured } from '../services/supabase';
 import { View, User } from '../types';
@@ -42,6 +43,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, logo }) =
     { id: View.Courses, icon: GraduationCap, label: 'Cursos' },
     { id: View.Students, icon: Users, label: 'Alunos' },
     { id: View.Classes, icon: BookOpen, label: 'Turmas' },
+    { id: View.Exams, icon: ClipboardList, label: 'Avaliações' },
     { id: View.ReportCard, icon: FileText, label: 'Boletim Escolar' },
     { id: View.Finance, icon: CircleDollarSign, label: 'Financeiro' },
     { id: View.Contracts, icon: FileSignature, label: 'Contratos' },

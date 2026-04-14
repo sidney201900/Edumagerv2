@@ -35,6 +35,7 @@ const initialData: SchoolData = {
   employeeCategories: [],
   lessons: [],
   notifications: [],
+  exams: [],
   profile: {
     id: 'main-school',
     name: 'EduManager School',

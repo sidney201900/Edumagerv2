@@ -232,6 +232,23 @@ export interface Employee {
   categoryId: string;
 }
 
+export interface Question {
+  id: string;
+  text: string;
+  imageUrl?: string;
+  options: string[];
+  correctOptionIndex: number;
+}
+
+export interface Exam {
+  id: string;
+  classId: string;
+  title: string;
+  durationMinutes: number;
+  status: 'draft' | 'published';
+  questions: Question[];
+}
+
 export interface SchoolData {
   users: User[];
   courses: Course[];
@@ -252,6 +269,7 @@ export interface SchoolData {
   employeeCategories?: EmployeeCategory[];
   lessons?: Lesson[];
   notifications?: Notification[];
+  exams?: Exam[];
   profiles: SchoolProfile[];
   profile: SchoolProfile;
   logo?: string;
@@ -291,5 +309,6 @@ export enum View {
   Employees = 'employees',
   Settings = 'settings',
   Users = 'users',
-  Messages = 'messages'
+  Messages = 'messages',
+  Exams = 'exams'
 }

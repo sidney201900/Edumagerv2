@@ -20,6 +20,7 @@ import Handouts from './components/Handouts';
 import Employees from './components/Employees';
 import Messages from './components/Messages';
 import AdminNotifications from './components/AdminNotifications';
+import Exams from './components/Exams';
 import { Cloud, CloudOff, RefreshCw, AlertCircle } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './services/supabase';
 import { DialogProvider } from './DialogContext';
@@ -212,6 +213,8 @@ const App = () => {
         return <ReportCard data={data} updateData={updateData} />;
       case View.Handouts:
         return <Handouts data={data} updateData={updateData} />;
+      case View.Exams:
+        return <Exams data={data} updateData={updateData} />;
       case View.Employees:
         return <Employees data={data} updateData={updateData} />;
       case View.Users:

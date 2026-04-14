@@ -1051,19 +1051,20 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
                   return (
                     <React.Fragment key={group.installmentId}>
                       <tr className="hover:bg-indigo-50/30 transition-colors group bg-slate-50/50">
+                        <td className="w-12 px-4 py-4"></td>
                         <td className="px-6 py-5 whitespace-nowrap min-w-[250px]"><div className="font-bold text-slate-900 flex items-center gap-2 truncate max-w-[250px]">{student?.name || 'Aluno Removido'}
                         </div>
                           <div className="text-[10px] font-black text-indigo-500 uppercase tracking-wide mt-1 flex items-center gap-1">
                             <Layers size={12} />
-                            Carnê de {group.payments.length}x
+                            Carnê de {group.totalInstallments}x
                           </div>
                           <div className="text-[10px] text-slate-400 mt-0.5">{group.description}</div>
                         </td>
                         <td className="px-6 py-5 text-slate-600 text-sm font-medium">
                           {group.payments.length > 0 && (
                             <>
-                              <span className="text-xs text-slate-400 block">Início: {new Date(group.payments[0].dueDate).toLocaleDateString('pt-BR')}</span>
-                              <span className="text-xs text-slate-400 block">Fim: {new Date(group.payments[group.payments.length - 1].dueDate).toLocaleDateString('pt-BR')}</span>
+                              <span className="text-xs text-slate-400 block">Início: {new Date(group.payments[0].dueDate + 'T12:00:00Z').toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</span>
+                              <span className="text-xs text-slate-400 block">Fim: {new Date(group.payments[group.payments.length - 1].dueDate + 'T12:00:00Z').toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</span>
                             </>
                           )}
                         </td>
@@ -1554,7 +1555,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
                     <div className="flex-1 flex justify-between items-center">
                       <div>
                         <span className="font-bold text-slate-700">Parcela {p.installmentNumber}</span>
-                        <span className="text-sm font-medium text-slate-500 ml-3">Venc: {new Date(p.dueDate).toLocaleDateString()}</span>
+                        <span className="text-sm font-medium text-slate-500 ml-3">Venc: {new Date(p.dueDate + 'T12:00:00Z').toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</span>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="font-black text-slate-800">R$ {p.amount.toFixed(2)}</span>
@@ -1788,7 +1789,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
                           <div className="text-[10px] text-slate-400 font-mono">{record.aluno_id}</div>
                         </td>
                         <td className="p-4 font-black text-slate-900">R$ {Number(record.valor).toFixed(2)}</td>
-                        <td className="p-4 font-medium text-slate-600">{new Date(record.vencimento).toLocaleDateString('pt-BR')}</td>
+                        <td className="p-4 font-medium text-slate-600">{new Date(record.vencimento + 'T12:00:00Z').toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</td>
                         <td className="p-4">
                           <span className={`px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
                             record.status === 'PAGO' ? 'bg-emerald-100 text-emerald-700' :
