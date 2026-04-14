@@ -1116,7 +1116,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
                               </div>
                             </td>
                             <td className="px-4 py-4 text-slate-600 text-sm">
-                              {new Date(payment.dueDate).toLocaleDateString('pt-BR')}
+                              {new Date(payment.dueDate + 'T12:00:00Z').toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
                             </td>
                             <td className="px-4 py-4">
                               <div className="font-bold text-slate-700 text-sm">R$ {payment.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
@@ -1192,7 +1192,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
                         </div>
                         {payment.description && <div className="text-[10px] text-slate-400 mt-0.5 truncate" style={{ maxWidth: '230px' }}>{payment.description}</div>}
                       </td>
-                      <td className="px-4 py-5 text-slate-600 text-sm">{new Date(payment.dueDate).toLocaleDateString('pt-BR')}</td>
+                      <td className="px-4 py-5 text-slate-600 text-sm">{new Date(payment.dueDate + 'T12:00:00Z').toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</td>
                       <td className="px-4 py-5">
                         <div className="font-black text-slate-900 text-sm">R$ {payment.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                         {!!payment.discount && payment.discount > 0 && <div className="text-[10px] text-emerald-600 font-bold">- R$ {payment.discount.toFixed(2)}</div>}
@@ -1380,7 +1380,7 @@ const Finance: React.FC<FinanceProps> = ({ data, updateData }) => {
                         <div className="font-bold text-slate-700">{p.description || (p.type === 'monthly' ? 'Mensalidade' : 'Taxa')}</div>
                         {p.installmentNumber && <div className="text-[9px] text-slate-400">{p.installmentNumber}/{p.totalInstallments}</div>}
                       </td>
-                      <td className="px-4 py-3">{new Date(p.dueDate).toLocaleDateString('pt-BR')}</td>
+                      <td className="px-4 py-3">{new Date(p.dueDate + 'T12:00:00Z').toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</td>
                       <td className="px-4 py-3">R$ {p.amount.toFixed(2)}</td>
                       <td className="px-4 py-3">{getStatusBadge(p)}</td>
                       <td className="px-4 py-3 text-right flex justify-end gap-2">
