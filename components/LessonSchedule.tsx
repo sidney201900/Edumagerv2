@@ -78,13 +78,7 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
       return;
     }
 
-    // Só pode gerar a partir da data de início da turma (nunca para trás)
-    const turmaStartDate = classObj.startDate || '';
-    if (turmaStartDate && startDate < turmaStartDate) {
-      showAlert('Atenção', `A data de início não pode ser anterior à data de início da turma (${new Date(turmaStartDate + 'T12:00:00Z').toLocaleDateString('pt-BR')}).`, 'warning');
-      return;
-    }
-
+    // Bloqueio de retroatividade removido conforme solicitado.
     const start = new Date(startDate);
     const end = new Date(endDate);
     const day = parseInt(dayOfWeek, 10);
@@ -111,7 +105,7 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
           startTime,
           endTime,
           status: 'scheduled',
-          type: 'regular'
+          type: 'extra'
         });
       }
       current.setUTCDate(current.getUTCDate() + 7); // advance one week
@@ -155,7 +149,7 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
 
     // Mensagens WhatsApp
     try {
-      const payloadAlunos = students.map(student => {
+      const payloadAlunos = students.flatMap(student => {
         const birthDateStr = student.birthDate || '';
         let age = 18;
         if (birthDateStr && birthDateStr.includes('-')) {
@@ -168,18 +162,39 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
         }
         const isMinor = age < 18;
         
-        let targetPhone = isMinor && student.guardianPhone?.trim() ? student.guardianPhone : student.phone;
-        if (!targetPhone) targetPhone = student.guardianPhone || student.phone || '';
+        const targets = [];
 
-        let targetName = isMinor && student.guardianName?.trim() ? student.guardianName : student.name;
-        if (!targetName) targetName = student.guardianName || student.name || '';
-
-        return {
-          nome: targetName,
-          telefone: targetPhone,
-          nome_responsavel: student.guardianName,
-          telefone_responsavel: student.guardianPhone
-        };
+        if (isMinor) {
+          // 1. Envia para o Responsável
+          if (student.guardianPhone?.trim()) {
+            targets.push({
+              nome: student.guardianName?.trim() || 'Responsável',
+              telefone: student.guardianPhone.trim(),
+              nome_responsavel: student.guardianName,
+              telefone_responsavel: student.guardianPhone
+            });
+          }
+          // 2. Envia para o Aluno (se ele tiver celular próprio)
+          if (student.phone?.trim()) {
+            targets.push({
+              nome: student.name || 'Aluno',
+              telefone: student.phone.trim(),
+              nome_responsavel: student.guardianName,
+              telefone_responsavel: student.guardianPhone
+            });
+          }
+        } else {
+          // 3. Regra Maior de Idade (inalterada) - O foco é o próprio aluno
+          targets.push({
+            nome: student.name || 'Aluno',
+            telefone: student.phone?.trim() || student.guardianPhone?.trim() || '',
+            nome_responsavel: student.guardianName,
+            telefone_responsavel: student.guardianPhone
+          });
+        }
+        
+        // Remove possíveis contatos sem telefone para não bugar a API
+        return targets.filter(t => t.telefone);
       });
 
       fetch('/api/enviar-massa', {
@@ -497,6 +512,9 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
                 const isCompletedStatus = lesson.status === 'completed' || (now > lessonEnd && !isCancelled);
                 const isInProgress = !isCancelled && now >= lessonStart && now <= lessonEnd;
                 const isReposicao = lesson.type === 'reposicao';
+                const isExtra = lesson.type === 'extra';
+
+                const isPast = lessonEnd < now && !isInProgress;
 
                 return (
                   <div 
@@ -506,14 +524,16 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
                       isCancelled 
                         ? 'bg-red-50 border-red-200 opacity-80' 
                         : isInProgress
-                        ? 'bg-blue-50 border-blue-400 shadow-blue-100 shadow-lg'
-                        : isCompletedStatus
-                        ? 'bg-slate-50 border-slate-200 opacity-70'
+                        ? 'bg-indigo-50 border-indigo-400 shadow-indigo-100 shadow-lg'
+                        : isPast || isCompletedStatus
+                        ? 'bg-slate-50 border-slate-200 opacity-60 grayscale-[0.3]'
                         : isRescheduled
                         ? 'bg-orange-50 border-orange-300 shadow-sm'
+                        : isExtra
+                        ? 'bg-purple-50 border-purple-200'
                         : isReposicao
-                        ? 'bg-emerald-50 border-emerald-200'
-                        : 'bg-white border-slate-200 hover:border-indigo-300'
+                        ? 'bg-emerald-100 border-emerald-300'
+                        : 'bg-emerald-50 border-emerald-100 hover:border-emerald-300'
                     }`}
                   >
                     <div className="text-center">
@@ -547,6 +567,11 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
                         {isRescheduled && !isCancelled && !isReposicao && !isInProgress && !isCompletedStatus && (
                           <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-[9px] font-black uppercase rounded-full">
                             Reagendada
+                          </span>
+                        )}
+                        {isExtra && !isCancelled && !isInProgress && !isCompletedStatus && (
+                          <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[9px] font-black uppercase rounded-full">
+                            Aula Extra
                           </span>
                         )}
                         {isReposicao && !isCancelled && (

@@ -93,47 +93,9 @@ const Handouts: React.FC<HandoutsProps> = ({ data, updateData }) => {
     }
   }, [data.payments, data.handoutDeliveries, data.handouts, updateData, data]);
 
-  const syncAsaasPayments = async () => {
-    if (!isSupabaseConfigured() || isSyncing) return;
-    
-    const pendingAsaasDeliveries = deliveries.filter(d => d.asaasPaymentId && d.paymentStatus === 'pending');
-    if (pendingAsaasDeliveries.length === 0) return;
-
-    setIsSyncing(true);
-    try {
-      const paymentIds = pendingAsaasDeliveries.map(d => d.asaasPaymentId);
-      
-      const { data: cloudPayments, error } = await supabase
-        .from('alunos_cobrancas')
-        .select('asaas_payment_id, status')
-        .in('asaas_payment_id', paymentIds)
-        .eq('status', 'PAGO');
-
-      if (error) throw error;
-
-      if (cloudPayments && cloudPayments.length > 0) {
-        const paidIds = cloudPayments.map(p => p.asaas_payment_id);
-        
-        const updatedDeliveries = deliveries.map(d => {
-          if (d.asaasPaymentId && paidIds.includes(d.asaasPaymentId)) {
-            return {
-              ...d,
-              paymentStatus: 'paid' as const,
-              paymentDate: new Date().toISOString()
-            };
-          }
-          return d;
-        });
-
-        updateData({ handoutDeliveries: updatedDeliveries });
-        dbService.saveData({ ...data, handoutDeliveries: updatedDeliveries });
-        showAlert('Sincronização', `${cloudPayments.length} pagamento(s) confirmado(s) via Asaas!`, 'success');
-      }
-    } catch (error) {
-      console.error('Erro ao sincronizar pagamentos:', error);
-    } finally {
-      setIsSyncing(false);
-    }
+  // Sincronização automática removida conforme pedido
+  const syncAsaasPayments = () => {
+    // Função desativada para manter compatibilidade com render e evitar erros de referência
   };
   
   // Form state for new handout
@@ -304,14 +266,6 @@ const Handouts: React.FC<HandoutsProps> = ({ data, updateData }) => {
         </div>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex flex-wrap gap-2">
-            <button 
-              onClick={syncAsaasPayments}
-              disabled={isSyncing}
-              className={`flex items-center justify-center gap-2 px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all shadow-sm ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <RefreshCw size={20} className={isSyncing ? 'animate-spin' : ''} /> 
-              {isSyncing ? 'Sincronizando...' : 'Sincronizar Asaas'}
-            </button>
             <button 
               onClick={() => setShowAddHandout(true)}
               className="flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"

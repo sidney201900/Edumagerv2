@@ -74,7 +74,7 @@ export interface Lesson {
   startTime?: string; // HH:mm
   endTime?: string; // HH:mm
   status: 'scheduled' | 'cancelled' | 'completed' | 'rescheduled';
-  type: 'regular' | 'reposicao';
+  type: 'regular' | 'reposicao' | 'extra';
   cancelReason?: string;
   originalLessonId?: string; // Se type === 'reposicao'
 }
