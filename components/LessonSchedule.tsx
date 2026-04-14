@@ -122,15 +122,24 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
     }
 
     const updatedLessons = [...(data.lessons || []), ...newLessons];
-    updateData({ lessons: updatedLessons });
-    dbService.saveData({ ...data, lessons: updatedLessons });
+    
+    // Notificar alunos sobre novas aulas extras geradas
+    const datesList = newLessons.map(l => new Date(l.date + 'T12:00:00Z').toLocaleDateString('pt-BR')).join(', ');
+    const notifMsg = `Novas aulas extras foram agendadas para os dias: ${datesList} (${startTime} às ${endTime}).`;
+    const waMsg = `📅 *Novas Aulas Extras Agendadas!*\n\nOlá, {nome}!\nInformamos que foram agendadas novas aulas extras para a turma *${classObj.name}*.\n\n*Datas:* ${datesList}\n*Horário:* ${startTime} às ${endTime}\n\nAguardamos você!`;
+
+    const newNotifs = notifyLessonAction('Aulas Extras Agendadas', notifMsg, waMsg);
+    const updatedNotifications = [...(data.notifications || []), ...newNotifs];
+
+    updateData({ lessons: updatedLessons, notifications: updatedNotifications });
+    dbService.saveData({ ...data, lessons: updatedLessons, notifications: updatedNotifications });
 
     setShowGenerateModal(false);
     
     if (ignoredDates.length > 0) {
       showAlert('Aviso de Agendamento Parcial', `Aulas geradas, porém os dias ${ignoredDates.join(', ')} foram ignorados devido a choque de horário no mesmo intervalo (⚠️ Choque de Horários!).`, 'warning');
     } else {
-      showAlert('Sucesso', `${newLessons.length} aulas geradas com sucesso!`, 'success');
+      showAlert('Sucesso', `${newLessons.length} aulas extras geradas e alunos notificados!`, 'success');
     }
   };
 
