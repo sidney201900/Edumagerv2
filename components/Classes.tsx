@@ -64,8 +64,6 @@ const Classes: React.FC<ClassesProps> = ({ data, updateData, onNavigateToClass }
 
     const todayStr = new Date().toISOString().split('T')[0];
 
-    const todayStr = new Date().toISOString().split('T')[0];
-
     // Removido bloqueio de data retroativa para permitir planejamento histórico
     const newClassId = editingClass ? editingClass.id : crypto.randomUUID();
     const resolvedScheduleName = formData.scheduleDay ? DAY_NAMES[parseInt(formData.scheduleDay)] : formData.schedule;
