@@ -309,7 +309,7 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
 
     setIsClosing(true);
     const updatedLessons: Lesson[] = (data.lessons || []).map(l => 
-      l.id === lesson.id ? { ...l, date: replacementDate, startTime: replacementStartTime, endTime: replacementEndTime, status: 'rescheduled', cancelReason: undefined } : l
+      l.id === lesson.id ? { ...l, date: replacementDate, startTime: replacementStartTime, endTime: replacementEndTime, status: 'rescheduled', type: l.type, cancelReason: undefined } : l
     );
 
     const oldDateStr = new Date(lesson.date + 'T12:00:00Z').toLocaleDateString('pt-BR');
@@ -569,7 +569,7 @@ const LessonSchedule: React.FC<LessonScheduleProps> = ({ classObj, data, updateD
                             Reagendada
                           </span>
                         )}
-                        {isExtra && !isCancelled && !isInProgress && !isCompletedStatus && (
+                        {isExtra && !isCancelled && (
                           <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[9px] font-black uppercase rounded-full">
                             Aula Extra
                           </span>
