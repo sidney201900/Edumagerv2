@@ -203,6 +203,34 @@ const Exams: React.FC<ExamsProps> = ({ data, updateData }) => {
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all font-medium text-slate-800"
               />
             </div>
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Disciplina (Boletim)</label>
+              <select 
+                value={editingExam.subjectId || ''}
+                onChange={e => setEditingExam({...editingExam, subjectId: e.target.value || undefined})}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all font-medium text-slate-800"
+              >
+                <option value="">Nenhuma (não vincular)</option>
+                {(data.subjects || []).map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+              <p className="text-[11px] text-slate-400 mt-1.5">Vincule a uma disciplina do Boletim Escolar para lançar notas automaticamente.</p>
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Período (Boletim)</label>
+              <select 
+                value={editingExam.periodId || ''}
+                onChange={e => setEditingExam({...editingExam, periodId: e.target.value || undefined})}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all font-medium text-slate-800"
+              >
+                <option value="">Nenhum (não vincular)</option>
+                {(data.periods || []).map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <p className="text-[11px] text-slate-400 mt-1.5">Vincule a um período para que a nota apareça no campo correto do boletim.</p>
+            </div>
           </div>
         </div>
 
@@ -424,6 +452,18 @@ const Exams: React.FC<ExamsProps> = ({ data, updateData }) => {
                     <span className="font-bold text-slate-700">Duração:</span> 
                     {exam.durationMinutes} min
                   </p>
+                  {exam.subjectId && (
+                    <p className="text-sm text-slate-500 flex items-center gap-2">
+                      <span className="font-bold text-slate-700">Disciplina:</span> 
+                      {(data.subjects || []).find(s => s.id === exam.subjectId)?.name || '—'}
+                    </p>
+                  )}
+                  {exam.periodId && (
+                    <p className="text-sm text-slate-500 flex items-center gap-2">
+                      <span className="font-bold text-slate-700">Período:</span> 
+                      {(data.periods || []).find(p => p.id === exam.periodId)?.name || '—'}
+                    </p>
+                  )}
                 </div>
                 <div className="border-t border-slate-100 pt-4 flex justify-end">
                   <button 

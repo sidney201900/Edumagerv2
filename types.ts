@@ -243,6 +243,8 @@ export interface Question {
 export interface Exam {
   id: string;
   classId: string;
+  subjectId?: string; // Vincula à disciplina do Boletim Escolar
+  periodId?: string;  // Vincula ao período do Boletim Escolar
   title: string;
   durationMinutes: number;
   status: 'draft' | 'published';

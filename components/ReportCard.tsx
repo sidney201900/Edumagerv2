@@ -433,23 +433,39 @@ const ReportCard: React.FC<ReportCardProps> = ({ data, updateData }) => {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {subjects.map(subject => (
+                  {subjects.map(subject => {
+                    // Encontrar provas vinculadas a esta disciplina
+                    const linkedExams = (data.exams || []).filter(e => e.subjectId === subject.id && e.status === 'published');
+                    
+                    return (
                     <div key={subject.id} className="bg-slate-50 rounded-2xl p-6 border border-slate-100 space-y-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-indigo-600">
                           <BookOpen size={18} />
                           <h4 className="font-black text-slate-800 uppercase tracking-wider text-sm">{subject.name}</h4>
                         </div>
-                        <div className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-[10px] font-black text-slate-500">
-                          MÉDIA: {(() => {
-                            const subjectGrades = studentGrades[subject.id] || {};
-                            const vals = Object.values(subjectGrades).filter((v): v is number => typeof v === 'number' && v > 0);
-                            return vals.length > 0 ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1) : '0.0';
-                          })()}
+                        <div className="flex items-center gap-2">
+                          {linkedExams.length > 0 && (
+                            <div className="px-3 py-1 bg-violet-50 border border-violet-200 rounded-lg text-[10px] font-black text-violet-600 flex items-center gap-1">
+                              <FileText size={12} />
+                              {linkedExams.length} {linkedExams.length === 1 ? 'Prova' : 'Provas'}
+                            </div>
+                          )}
+                          <div className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-[10px] font-black text-slate-500">
+                            MÉDIA: {(() => {
+                              const subjectGrades = studentGrades[subject.id] || {};
+                              const vals = Object.values(subjectGrades).filter((v): v is number => typeof v === 'number' && v > 0);
+                              return vals.length > 0 ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1) : '0.0';
+                            })()}
+                          </div>
                         </div>
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                        {periods.map(period => (
+                        {periods.map(period => {
+                          // Verificar se há uma prova vinculada a esta disciplina+período
+                          const linkedExam = (data.exams || []).find(e => e.subjectId === subject.id && e.periodId === period.id && e.status === 'published');
+                          
+                          return (
                           <div key={period.id} className="space-y-1.5">
                             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">{period.name}</label>
                             <input 
@@ -457,7 +473,7 @@ const ReportCard: React.FC<ReportCardProps> = ({ data, updateData }) => {
                               min="0" 
                               max="10" 
                               step="0.1"
-                              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm font-bold text-center"
+                              className={`w-full px-3 py-2 bg-white border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm font-bold text-center ${linkedExam ? 'border-violet-300 ring-1 ring-violet-100' : 'border-slate-200'}`}
                               value={studentGrades[subject.id]?.[period.id] || 0}
                               onChange={(e) => {
                                 const val = parseFloat(e.target.value) || 0;
@@ -470,11 +486,18 @@ const ReportCard: React.FC<ReportCardProps> = ({ data, updateData }) => {
                                 }));
                               }}
                             />
+                            {linkedExam && (
+                              <p className="text-[9px] font-bold text-violet-500 truncate ml-1" title={linkedExam.title}>
+                                📝 {linkedExam.title}
+                              </p>
+                            )}
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
 
                   {/* General Average Summary */}
                   <div className="bg-indigo-600 rounded-2xl p-6 text-white flex items-center justify-between shadow-xl shadow-indigo-100">
