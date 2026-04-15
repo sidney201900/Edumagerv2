@@ -82,7 +82,10 @@ export const uploadLogo = async (file: File): Promise<string | null> => {
 };
 
 export const uploadExamImage = async (file: File): Promise<string | null> => {
-  if (!isSupabaseConfigured()) return null;
+  if (!isSupabaseConfigured()) {
+    console.error('Supabase is not configured. Check your environment variables.');
+    return null;
+  }
 
   try {
     const fileExt = file.name.split('.').pop() || 'webp';
@@ -96,15 +99,19 @@ export const uploadExamImage = async (file: File): Promise<string | null> => {
         contentType: file.type
       });
 
-    if (uploadError) throw uploadError;
+    if (uploadError) {
+      console.error('Supabase upload error details:', uploadError);
+      throw uploadError;
+    }
 
     const { data } = supabase.storage
       .from('edumanager-assets')
       .getPublicUrl(filePath);
 
     return data.publicUrl;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error uploading exam image:', error);
-    return null;
+    // Return a more descriptive error if possible by throwing it back to UI
+    throw error;
   }
 };

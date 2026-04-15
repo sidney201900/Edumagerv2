@@ -108,11 +108,12 @@ const Exams: React.FC<ExamsProps> = ({ data, updateData }) => {
       if (url) {
         handleQuestionChange(qIndex, 'imageUrl', url);
       } else {
-        alert('Falha ao fazer upload da imagem. Certifique-se de que o Supabase está configurado corretamente.');
+        alert('Falha ao obter URL pública da imagem após o upload.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert('Erro ao enviar imagem.');
+      const errorMessage = error.message || 'Erro desconhecido';
+      alert(`Erro ao enviar imagem: ${errorMessage}\n\nCertifique-se de que o bucket "edumanager-assets" existe no Supabase e tem as permissões corretas.`);
     } finally {
       setIsUploading(false);
       if (event.target) {
