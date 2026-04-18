@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SchoolData, Student, Class } from '../types';
 import { dbService } from '../services/dbService';
+import { uploadStudentPhoto } from '../services/supabase';
 import { addHeader, pdfService } from '../services/pdfService';
 import { useDialog } from '../DialogContext';
 import { compressImage } from '../services/imageService';
@@ -37,6 +38,7 @@ const Students: React.FC<StudentsProps> = ({ data, updateData, deepLinkStudentId
   const [activeTab, setActiveTab] = useState<'active' | 'cancelled'>('active');
   const [cancellationReason, setCancellationReason] = useState('');
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   
   // Form State
   const [formData, setFormData] = useState<Partial<Student>>({
@@ -662,6 +664,9 @@ const Students: React.FC<StudentsProps> = ({ data, updateData, deepLinkStudentId
       return;
     }
 
+    setIsSaving(true);
+    try {
+
     // Validation for minors
     if (formData.birthDate) {
       const age = calculateAge(formData.birthDate);
@@ -702,11 +707,23 @@ const Students: React.FC<StudentsProps> = ({ data, updateData, deepLinkStudentId
       portalPassword = rawCpfForPassword.substring(0, 6) || '123456';
     }
 
+    // Processar Foto em Storage (Evitar inchar o JSON)
+    let finalPhotoUrl = formData.photo || editingStudent?.photo;
+    if (formData.photo && formData.photo.startsWith('data:image')) {
+      const uploadUrl = await uploadStudentPhoto(formData.photo);
+      if (uploadUrl) {
+        finalPhotoUrl = uploadUrl;
+      } else {
+        showAlert('Aviso', 'Erro ao salvar a foto na nuvem. Ela foi salva localmente e pode falhar na sincronização.', 'warning');
+      }
+    }
+
     const studentToSave: Student = {
       ...(editingStudent || { id: studentId }),
       ...formData as Student,
       enrollmentNumber,
-      portalPassword
+      portalPassword,
+      photo: finalPhotoUrl
     };
 
     if (editingStudent) {
@@ -837,6 +854,12 @@ const Students: React.FC<StudentsProps> = ({ data, updateData, deepLinkStudentId
     dbService.saveData({ ...data, ...newData });
     showAlert('Sucesso', (formData as any).generateFee ? 'Aluno salvo e nova cobrança gerada com sucesso.' : 'Aluno salvo com sucesso.', 'success');
     closeModal();
+    } catch (error) {
+      console.error(error);
+      showAlert('Erro', 'Ocorreu um erro ao salvar o aluno.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDelete = (student: Student) => {
@@ -1730,9 +1753,11 @@ const Students: React.FC<StudentsProps> = ({ data, updateData, deepLinkStudentId
               </button>
               <button 
                 onClick={handleSave}
-                className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all flex items-center gap-2"
+                disabled={isSaving}
+                className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all flex items-center gap-2 disabled:opacity-50"
               >
-                <Save size={18} /> Salvar Matrícula
+                {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                {isSaving ? 'Salvando...' : 'Salvar Matrícula'}
               </button>
             </div>
           </div>

@@ -115,3 +115,47 @@ export const uploadExamImage = async (file: File): Promise<string | null> => {
     throw error;
   }
 };
+
+export const uploadStudentPhoto = async (photoData: string): Promise<string | null> => {
+  if (!isSupabaseConfigured() || !photoData || !photoData.startsWith('data:image')) {
+    return photoData && photoData.startsWith('http') ? photoData : null; // Return if already a URL
+  }
+
+  try {
+    const [header, base64Data] = photoData.split(',');
+    const mimeMatch = header.match(/:(.*?);/);
+    if (!mimeMatch) return null;
+    const mimeType = mimeMatch[1];
+    
+    // Decode base64 
+    const byteString = atob(base64Data);
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+    }
+    const blob = new Blob([ab], { type: mimeType });
+
+    const fileExt = mimeType.split('/')[1] || 'webp';
+    const fileName = `student-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const filePath = `students/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('edumanager-assets')
+      .upload(filePath, blob, {
+        upsert: true,
+        contentType: mimeType
+      });
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage
+      .from('edumanager-assets')
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
+  } catch (error: any) {
+    console.error('Error uploading student photo:', error);
+    return null;
+  }
+};
