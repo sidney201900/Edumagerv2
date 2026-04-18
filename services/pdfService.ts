@@ -432,7 +432,7 @@ export const pdfService = {
     currentY = drawField('Nome', student.name, currentY);
     currentY = drawField('CPF', student.cpf, currentY);
     currentY = drawField('RG', student.rg, currentY);
-    currentY = drawField('Data de Nascimento', student.birthDate ? new Date(student.birthDate).toLocaleDateString('pt-BR') : '', currentY);
+    currentY = drawField('Data de Nascimento', student.birthDate ? student.birthDate.split('-').reverse().join('/') : '', currentY);
     currentY = drawField('Email', student.email, currentY);
     currentY = drawField('Telefone', student.phone, currentY);
 
@@ -461,7 +461,7 @@ export const pdfService = {
     currentY = drawField('Turma', cls?.name || 'Não atribuída', currentY);
     currentY = drawField('Horário', cls?.schedule || 'N/A', currentY);
     currentY = drawField('Professor', cls?.teacher || 'N/A', currentY);
-    currentY = drawField('Data Matrícula', new Date(student.registrationDate).toLocaleDateString('pt-BR'), currentY);
+    currentY = drawField('Data Matrícula', student.registrationDate ? student.registrationDate.split('T')[0].split('-').reverse().join('/') : '', currentY);
 
     currentY += 10;
 
@@ -536,7 +536,7 @@ export const pdfService = {
       head: [['Título', 'Data Emissão']],
       body: contracts.map(c => [
         c.title,
-        new Date(c.createdAt).toLocaleDateString('pt-BR')
+        c.createdAt ? c.createdAt.split('T')[0].split('-').reverse().join('/') : ''
       ]),
       headStyles: { fillColor: [0, 0, 0] }
     });
@@ -554,7 +554,7 @@ export const pdfService = {
       head: [['Descrição', 'Vencimento', 'Valor', 'Status']],
       body: payments.map(p => [
         p.description || (p.type === 'registration' ? 'Matrícula' : 'Mensalidade'),
-        new Date(p.dueDate).toLocaleDateString('pt-BR'),
+        p.dueDate ? p.dueDate.split('T')[0].split('-').reverse().join('/') : '',
         `R$ ${p.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
         p.status === 'paid' ? 'Pago' : p.status === 'overdue' ? 'Atrasado' : 'Pendente'
       ]),
@@ -600,7 +600,7 @@ export const pdfService = {
       payment.type === 'monthly' ? 'Mensalidade do Curso' : 'Outros Serviços';
 
     doc.text(`Referente a: ${typeLabel} ${payment.description ? `(${payment.description})` : ''}`, 20, 95);
-    doc.text(`Data de Vencimento: ${new Date(payment.dueDate).toLocaleDateString('pt-BR')}`, 20, 105);
+    doc.text(`Data de Vencimento: ${payment.dueDate ? payment.dueDate.split('T')[0].split('-').reverse().join('/') : ''}`, 20, 105);
 
     if (payment.status === 'paid' && payment.paidDate) {
       doc.setFontSize(12);
@@ -637,7 +637,7 @@ export const pdfService = {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
 
-    doc.text(`DATA DE EMISSÃO: ${new Date(contract.createdAt).toLocaleDateString('pt-BR')}`, 20, currentY);
+    doc.text(`DATA DE EMISSÃO: ${contract.createdAt ? contract.createdAt.split('T')[0].split('-').reverse().join('/') : ''}`, 20, currentY);
     currentY += 6;
     doc.text(`CONTRATANTE: ${student.name.toUpperCase()}`, 20, currentY);
     currentY += 6;

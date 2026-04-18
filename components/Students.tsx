@@ -790,7 +790,7 @@ const Students: React.FC<StudentsProps> = ({ data, updateData, deepLinkStudentId
       content = content.replace(/{{aluno}}/g, studentToSave.name || '');
       content = content.replace(/{{aluno_cpf}}/g, studentToSave.cpf || '');
       content = content.replace(/{{aluno_rg}}/g, studentToSave.rg || '');
-      content = content.replace(/{{aluno_nascimento}}/g, studentToSave.birthDate ? new Date(studentToSave.birthDate).toLocaleDateString('pt-BR') : '');
+      content = content.replace(/{{aluno_nascimento}}/g, studentToSave.birthDate ? studentToSave.birthDate.split('-').reverse().join('/') : '');
       content = content.replace(/{{aluno_email}}/g, studentToSave.email || '');
       content = content.replace(/{{aluno_telefone}}/g, studentToSave.phone || '');
       content = content.replace(/{{aluno_cep}}/g, studentToSave.addressZip || '');
@@ -802,7 +802,7 @@ const Students: React.FC<StudentsProps> = ({ data, updateData, deepLinkStudentId
       // Responsável
       content = content.replace(/{{responsavel_nome}}/g, studentToSave.guardianName || '');
       content = content.replace(/{{responsavel_cpf}}/g, studentToSave.guardianCpf || '');
-      content = content.replace(/{{responsavel_nascimento}}/g, studentToSave.guardianBirthDate ? new Date(studentToSave.guardianBirthDate).toLocaleDateString('pt-BR') : '');
+      content = content.replace(/{{responsavel_nascimento}}/g, studentToSave.guardianBirthDate ? studentToSave.guardianBirthDate.split('-').reverse().join('/') : '');
 
       // Curso e Turma
       content = content.replace(/{{curso}}/g, course.name || '');

@@ -53,9 +53,9 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
     let updatedAttendance = [...(data.attendance || [])];
     
     if (record.isVirtual) {
-      // Create a new record based on virtual info
+      // Ação do botão do Admin: criar o registro real a partir do virtual
       const lesson = data.lessons.find(l => l.id === record.id.replace('v-', ''));
-      const newType = record.type === 'presence' ? 'absence' : 'presence';
+      const newType = (record.type === 'absence' || record.type === 'awaiting') ? 'presence' : 'absence';
       
       const newRecord: Attendance = {
         id: crypto.randomUUID(),
@@ -63,9 +63,21 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
         classId: record.classId,
         date: lesson ? `${lesson.date}T${lesson.startTime || '00:00'}:00` : new Date().toISOString(),
         verified: true,
-        type: newType
+        type: newType,
+        ...(lesson ? { lessonId: lesson.id } : {}) // Vinculação rígida para não haver duplicidade
       };
-      updatedAttendance.push(newRecord);
+
+      // Garantir que não duplica se já houver por algum erro
+      const existingIdx = updatedAttendance.findIndex(a => 
+        a.studentId === record.studentId && 
+        ((a as any).lessonId === lesson?.id || a.date === newRecord.date)
+      );
+
+      if (existingIdx >= 0) {
+        updatedAttendance[existingIdx] = { ...updatedAttendance[existingIdx], type: newType, justification: undefined, justificationAccepted: undefined };
+      } else {
+        updatedAttendance.push(newRecord);
+      }
     } else {
       // Toggle existing record
       const newType = record.type === 'absence' ? 'presence' : 'absence';
@@ -423,29 +435,29 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                   .filter(l => l.classId === selectedClass.id && l.status !== 'cancelled');
 
                 const virtualRecords: any[] = [];
+                const matchedActualRecordIds = new Set<string>();
                 
                 classLessons.forEach(lesson => {
+                  const lessonStart = new Date(lesson.date + 'T' + (lesson.startTime || '00:00') + ':00');
+                  const lessonEnd = new Date(lesson.date + 'T' + (lesson.endTime || '23:59') + ':00');
+                  const presenceStartWindow = new Date(lessonStart.getTime() - 30 * 60 * 1000); // 30 mins before
+                  
+                  // Lógica de "Casamento" refinada para evitar duplicidade
                   const matchingRecord = actualRecords.find(a => {
-                    if (!a.date.startsWith(lesson.date)) return false;
-                    if (!lesson.startTime) return true; 
-                    const recordTime = a.date.split('T')[1]?.substring(0, 5);
-                    if (!recordTime) return true;
-                    const [lH, lM] = lesson.startTime.split(':').map(Number);
-                    const [rH, rM] = recordTime.split(':').map(Number);
-                    return Math.abs((lH * 60 + lM) - (rH * 60 + rM)) < 90;
+                    // Match forte se já tiver lessonId (registros criados a partir daqui)
+                    if ((a as any).lessonId === lesson.id) return true;
+                    // Match de horário exato (manual antigo)
+                    if (a.date === `${lesson.date}T${lesson.startTime || '00:00'}:00`) return true;
+                    
+                    // Match por Janela de Tempo (Biometria): entre 30 min antes da aula até o fim da aula
+                    const recordTime = new Date(a.date);
+                    return recordTime >= presenceStartWindow && recordTime <= lessonEnd;
                   });
                   
                   if (!matchingRecord) {
-                    const [endHours, endMinutes] = (lesson.endTime || '23:59').split(':');
-                    const lessonEnd = new Date(lesson.date + 'T' + (lesson.endTime || '23:59') + ':00');
-                    
-                    // Difference in milliseconds
-                    const diffMs = now.getTime() - lessonEnd.getTime();
-
-                    // Only show if lesson is today or in the past
-                    if (diffMs > - (24 * 60 * 60 * 1000)) { // 1 day before lesson end
-                      const isFinished = diffMs > 0;
-                      const isRecent = diffMs <= (24 * 60 * 60 * 1000);
+                    // Não tem ponto registrado ainda. Criar o virtual apenas se já estiver na janela
+                    if (now >= presenceStartWindow) {
+                      const isFinished = now > lessonEnd;
 
                       virtualRecords.push({
                         id: `v-${lesson.id}`,
@@ -455,15 +467,26 @@ const AttendanceQuery: React.FC<AttendanceQueryProps> = ({ data, updateData, dee
                         type: isFinished ? 'absence' : 'awaiting',
                         isVirtual: true,
                         lessonId: lesson.id,
-                        awaiting: isRecent // Show note if finished < 24h OR if not finished yet
+                        awaiting: !isFinished
                       });
                     }
                   } else {
                     (matchingRecord as any).lessonId = lesson.id;
+                    matchedActualRecordIds.add(matchingRecord.id);
                   }
                 });
 
-                const studentRecords = [...actualRecords, ...virtualRecords]
+                // Filtrar os records reais para evitar duplicidade na lista caso haja lixo no banco
+                // Só mostra os reais que casaram com aulas válidas, MAIS qualquer registro avulso
+                // que, por algum motivo exótico não casou (fallback de segurança visual)
+                const uniqueActualRecords = actualRecords.filter(a => {
+                  if (matchedActualRecordIds.has(a.id)) return true;
+                  // Se não casou, e a aula for do mesmo dia, ignora para não poluir (provavelmente duplicata de biometria)
+                  const hasLessonSameDay = classLessons.some(l => a.date.startsWith(l.date));
+                  return !hasLessonSameDay;
+                });
+
+                const studentRecords = [...uniqueActualRecords, ...virtualRecords]
                   .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
                 if (studentRecords.length === 0) {
